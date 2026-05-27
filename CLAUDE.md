@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Static one-page website for [petruc.io](https://petruc.io) — Peter Trumpp's freelance IT consulting landing page. No build step; files are deployed directly to Netlify.
+Static one-page website for [trumpp.dev](https://trumpp.dev) — Peter Trumpp's freelance IT consulting landing page. No build step; files are deployed directly to Netlify.
+
+This project is a fork/copy of the petruc-io-onepager codebase. All references to `petruc.io` must be replaced with `trumpp.dev`.
 
 ## Deployment
 

@@ -66,7 +66,7 @@ export default async (req, context) => {
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Login – petruc.io/stats</title>
+  <title>Login – trumpp.dev/stats</title>
   <style>
     body { font-family: sans-serif; display: flex; justify-content: center;
            align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
@@ -79,7 +79,7 @@ export default async (req, context) => {
 </head>
 <body>
   <div class="box">
-    <h2 style="margin-top:0">petruc.io · Stats</h2>
+    <h2 style="margin-top:0">trumpp.dev · Stats</h2>
     <input type="password" id="pw" placeholder="Passwort" />
     <button onclick="login()">Login</button>
     <div class="error" id="err">Falsches Passwort</div>
