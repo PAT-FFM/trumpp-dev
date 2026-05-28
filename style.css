@@ -20,7 +20,6 @@ html, body {
 body {
   position: relative;
   color: var(--text-color);
-  background-color: #2a3a4a;
 }
 
 video.bg-video {

@@ -16,6 +16,7 @@
   
   <video class="bg-video" autoplay muted loop playsinline webkit-playsinline>
     <source src="video.mp4" type="video/mp4">
+    Your browser does not support the video tag.
   </video>
   
   <a href="https://www.linkedin.com/in/peter-trumpp-8487b0243/" target="_blank" rel="noopener" class="content">
@@ -37,9 +38,6 @@
   <script>
     const spans = document.querySelectorAll('.tagline span');
     spans[Math.floor(Math.random() * spans.length)].classList.add('active');
-
-    const vid = document.querySelector('video.bg-video');
-    if (vid) vid.play().catch(() => {});
   </script>
 </body>
 </html>
