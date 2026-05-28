@@ -37,7 +37,7 @@
   
   <script>
     const spans = document.querySelectorAll('.tagline span');
-    spans[Math.floor(Math.random() * spans.length)].classList.add('active');
+    spans[crypto.getRandomValues(new Uint32Array(1))[0] % spans.length].classList.add('active');
   </script>
 </body>
 </html>
