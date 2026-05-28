@@ -19,31 +19,25 @@
     Dein Browser unterstützt keine HTML5-Videos.
   </video>
   
-  <div class="content">
+  <a href="https://www.linkedin.com/in/peter-trumpp-8487b0243/" target="_blank" rel="noopener" class="content">
     <header>
-      <a href="index.html"><img src="logo.png" alt="Home Logo"></a>
-      <h1>Willkommen!</h1>
-      <p>Ich bin Peter Trumpp – freiberuflicher IT-Berater. Ich helfe, Komplexität zu bändigen.</p>
-      <a href="https://www.linkedin.com/in/peter-trumpp-8487b0243/" class="cta">Kontakt via LinkedIn</a>
-      <!--
-      <br/>
-      <a href="https://www.youtube.com/watch?v=E3YeMPQWffg" target="_blank" rel="noopener" class="yt-thumb" 
-         referrerpolicy="no-referrer-when-downgrade"
-         title="fresh from the LAB: Agentic Content Editing @AEM">
-        <img src="https://img.youtube.com/vi/E3YeMPQWffg/maxresdefault.jpg" alt="show Video">
-        <svg class="yt-play" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="32" cy="32" r="32" fill="rgba(0,0,0,0.55)"/>
-          <polygon points="26,20 50,32 26,44" fill="white"/>
-        </svg>
-      </a>
-      -->
-
+      <img src="logo.svg" alt="Peter Trumpp Consulting">
     </header>
-  </div>
+
+    <div class="tagline" aria-live="polite">
+      <span>Watching the horizon. Ready for the next wave.</span>
+      <span>Positioned in the lineup. Preparing for what's next.</span>
+      <span>In the lineup for the next wave.</span>
+    </div>
+  </a>
   
   <footer>
     &copy; 2026 Peter Trumpp | <a href="impressum.html">Impressum</a> | Assets by <a href="https://www.freepik.com/" target="_blank">freepik</a> 
   </footer>
   
+  <script>
+    const spans = document.querySelectorAll('.tagline span');
+    spans[Math.floor(Math.random() * spans.length)].classList.add('active');
+  </script>
 </body>
 </html>

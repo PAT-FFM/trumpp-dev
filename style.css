@@ -44,12 +44,22 @@ video.bg-video {
   height: 100vh;
   text-align: center;
   padding: 2rem;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+header {
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 header img {
-  max-width: 200px;
+  max-width: 300px;
   height: auto;
-  margin-bottom: 1rem;
+  display: block;
 }
 
 h1 {
@@ -80,16 +90,16 @@ a.cta:hover {
 footer {
   position: fixed;
   bottom: 1rem;
-  font-size: 0.875rem;
-  color: #aaa;
+  font-size: 0.675rem;
+  color: #777;
   width: 100%;
   text-align: center;
   z-index: 2;
 }
 
 footer a{
-  font-size: 0.875rem;
-  color: #aaa;
+  font-size: 0.675rem;
+  color: #777;
 }
 
 .yt-thumb {
@@ -117,9 +127,39 @@ footer a{
   height: 36px;
 }
 
+.tagline {
+  position: relative;
+  height: 3rem;
+  margin-top: 1.25rem;
+  width: 100%;
+  max-width: 700px;
+}
+
+.tagline span {
+  position: absolute;
+  width: 100%;
+  left: 0;
+  opacity: 0;
+  font-style: italic;
+  font-size: 1.8rem;
+  color: #444;
+}
+
+.tagline span.active {
+  animation: tagline-pulse 12s linear infinite;
+}
+
+@keyframes tagline-pulse {
+  0%,  16%  { opacity: 0; }   /* 2s komplett unsichtbar */
+  33%        { opacity: 1; }   /* 2s einblenden */
+  67%        { opacity: 1; }   /* 4s sichtbar halten */
+  83%        { opacity: 0; }   /* 2s ausblenden */
+  100%       { opacity: 0; }   /* 2s komplett unsichtbar */
+}
+
 @media (orientation: landscape) and (max-height: 500px) {
   header img {
-    max-width: 90px;
+    max-width: 180px;
     margin-bottom: 0.25rem;
   }
 
@@ -135,5 +175,13 @@ footer a{
 
   .content {
     padding: 1rem 2rem 3rem;
+  }
+
+  .tagline {
+    margin-top: 0.5rem;
+  }
+
+  .tagline span {
+    font-size: 1.25rem;
   }
 }
