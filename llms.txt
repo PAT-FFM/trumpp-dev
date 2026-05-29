@@ -1,14 +1,10 @@
 # Peter Trumpp – Freelance Software Engineer & IT-Consultant
 
-> Freelance Software Engineer & IT-Consultant based in Germany.
-> I help teams tame complexity, design clean architectures,
-> and deliver reliable software.
+> Freelance Software Engineer & IT-Consultant based in Germany. I help teams tame complexity, design clean architectures, and deliver reliable software.
 
 ## About
 
-Peter Trumpp is a freelance software engineer and IT consultant
-based in Koblenz, Germany. He helps companies reduce technical
-complexity, design maintainable systems, and ship reliable software.
+Peter Trumpp is a freelance software engineer and IT consultant based in Koblenz, Germany. He helps companies reduce technical complexity, design maintainable systems, and ship reliable software.
 
 ## Services
 
@@ -18,9 +14,7 @@ complexity, design maintainable systems, and ship reliable software.
 
 ## Approach
 
-Peter Trumpp asks the questions others skip. He digs until all
-stakeholders share the same understanding — because misaligned
-assumptions are where projects quietly go wrong.
+Peter Trumpp asks the questions others skip. He digs until all stakeholders share the same understanding — because misaligned assumptions are where projects quietly go wrong.
 
 ## Contact
 
