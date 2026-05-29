@@ -69,7 +69,7 @@ export default async (req) => {
 
   if (method === "initialize") {
     return jsonRpc(id, {
-      protocolVersion: "2024-11-05",
+      protocolVersion: "2025-03-26",
       capabilities: { tools: {} },
       serverInfo: { name: "trumpp-dev-mcp", version: "1.0.0" },
     });
