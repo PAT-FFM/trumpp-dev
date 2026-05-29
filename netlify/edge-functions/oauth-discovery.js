@@ -1,7 +1,6 @@
 export default async (req, context) => {
   return new Response(
     JSON.stringify({
-      resource: "https://trumpp.dev",
       authorization_servers: []
     }),
     {
