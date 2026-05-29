@@ -62,6 +62,17 @@ export default async (req) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  if (req.method === "GET") {
+    return new Response(": connected\n\n", {
+      headers: {
+        ...CORS_HEADERS,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Mcp-Protocol-Version": PROTOCOL_VERSION,
+      },
+    });
+  }
+
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
   }
