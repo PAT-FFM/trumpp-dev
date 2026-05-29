@@ -37,10 +37,6 @@ const TOOLS = [
   },
 ];
 
-const encoder = new TextEncoder();
-
-// Antwort liefern — als SSE-Stream, wenn der Client text/event-stream akzeptiert,
-// sonst als reines JSON. Anthropics Connector verlangt das SSE-Format.
 function reply(payload, { acceptsSse, sessionId } = {}) {
   const headers = { ...CORS_HEADERS, "Mcp-Protocol-Version": PROTOCOL_VERSION };
   if (sessionId) headers["Mcp-Session-Id"] = sessionId;
@@ -64,30 +60,6 @@ export default async (req) => {
 
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-
-  // GET: offener server→client SSE-Kanal mit Keepalive.
-  if (req.method === "GET") {
-    const stream = new ReadableStream({
-      start(controller) {
-        controller.enqueue(encoder.encode(": connected\n\n"));
-        const ping = setInterval(() => {
-          try {
-            controller.enqueue(encoder.encode(": ping\n\n"));
-          } catch {
-            clearInterval(ping);
-          }
-        }, 15000);
-      },
-    });
-    return new Response(stream, {
-      headers: {
-        ...CORS_HEADERS,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Mcp-Protocol-Version": PROTOCOL_VERSION,
-      },
-    });
   }
 
   if (req.method !== "POST") {
