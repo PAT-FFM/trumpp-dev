@@ -1,7 +1,12 @@
+const PROTOCOL_VERSION = "2025-06-18";
+const SUPPORTED_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Accept, Authorization, Mcp-Session-Id, Mcp-Protocol-Version",
+  "Access-Control-Expose-Headers": "Mcp-Session-Id, Mcp-Protocol-Version",
 };
 
 const PROFILE = {
@@ -28,30 +33,61 @@ const TOOLS = [
     name: "get_profile",
     description:
       "Returns structured profile information about Peter Trumpp: services, approach, contact details, and availability.",
-    inputSchema: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
+    inputSchema: { type: "object", properties: {}, required: [] },
   },
 ];
 
-function jsonRpc(id, result) {
-  return new Response(JSON.stringify({ jsonrpc: "2.0", id, result }), {
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-  });
+const encoder = new TextEncoder();
+
+// Antwort liefern — als SSE-Stream, wenn der Client text/event-stream akzeptiert,
+// sonst als reines JSON. Anthropics Connector verlangt das SSE-Format.
+function reply(payload, { acceptsSse, sessionId } = {}) {
+  const headers = { ...CORS_HEADERS, "Mcp-Protocol-Version": PROTOCOL_VERSION };
+  if (sessionId) headers["Mcp-Session-Id"] = sessionId;
+
+  if (acceptsSse) {
+    headers["Content-Type"] = "text/event-stream";
+    headers["Cache-Control"] = "no-cache";
+    return new Response(`event: message\ndata: ${JSON.stringify(payload)}\n\n`, { headers });
+  }
+  headers["Content-Type"] = "application/json";
+  return new Response(JSON.stringify(payload), { headers });
 }
 
-function jsonRpcError(id, code, message) {
-  return new Response(
-    JSON.stringify({ jsonrpc: "2.0", id, error: { code, message } }),
-    { status: 400, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
-  );
-}
+const result = (id, result, opts) => reply({ jsonrpc: "2.0", id, result }, opts);
+const rpcError = (id, code, message, opts) =>
+  reply({ jsonrpc: "2.0", id, error: { code, message } }, opts);
 
 export default async (req) => {
+  const accept = req.headers.get("Accept") || "";
+  const acceptsSse = accept.includes("text/event-stream");
+
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  // GET: offener server→client SSE-Kanal mit Keepalive.
+  if (req.method === "GET") {
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(": connected\n\n"));
+        const ping = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(": ping\n\n"));
+          } catch {
+            clearInterval(ping);
+          }
+        }, 15000);
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        ...CORS_HEADERS,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Mcp-Protocol-Version": PROTOCOL_VERSION,
+      },
+    });
   }
 
   if (req.method !== "POST") {
@@ -62,40 +98,47 @@ export default async (req) => {
   try {
     body = await req.json();
   } catch {
-    return jsonRpcError(null, -32700, "Parse error");
+    return rpcError(null, -32700, "Parse error", { acceptsSse });
   }
 
   const { id, method, params } = body;
 
-  // Notifications (kein id-Feld, z.B. notifications/initialized)
-  // bekommen keine Antwort – nur 202 ohne Body.
+  // Notifications (kein id-Feld, z.B. notifications/initialized) → 202 ohne Body.
   if (id === undefined) {
     return new Response(null, { status: 202, headers: CORS_HEADERS });
   }
 
   if (method === "initialize") {
-    return jsonRpc(id, {
-      protocolVersion: "2025-03-26",
-      capabilities: { tools: {} },
-      serverInfo: { name: "trumpp-dev-mcp", version: "1.0.0" },
-    });
+    const requested = params?.protocolVersion;
+    const version = SUPPORTED_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSION;
+    return result(
+      id,
+      {
+        protocolVersion: version,
+        capabilities: { tools: {} },
+        serverInfo: { name: "trumpp-dev-mcp", version: "1.0.0" },
+      },
+      { acceptsSse, sessionId: crypto.randomUUID() }
+    );
   }
 
   if (method === "tools/list") {
-    return jsonRpc(id, { tools: TOOLS });
+    return result(id, { tools: TOOLS }, { acceptsSse });
   }
 
   if (method === "tools/call") {
     const toolName = params?.name;
     if (toolName === "get_profile") {
-      return jsonRpc(id, {
-        content: [{ type: "text", text: JSON.stringify(PROFILE, null, 2) }],
-      });
+      return result(
+        id,
+        { content: [{ type: "text", text: JSON.stringify(PROFILE, null, 2) }] },
+        { acceptsSse }
+      );
     }
-    return jsonRpcError(id, -32602, `Unknown tool: ${toolName}`);
+    return rpcError(id, -32602, `Unknown tool: ${toolName}`, { acceptsSse });
   }
 
-  return jsonRpcError(id, -32601, `Method not found: ${method}`);
+  return rpcError(id, -32601, `Method not found: ${method}`, { acceptsSse });
 };
 
 export const config = { path: "/mcp" };
