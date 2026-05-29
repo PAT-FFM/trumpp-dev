@@ -67,6 +67,12 @@ export default async (req) => {
 
   const { id, method, params } = body;
 
+  // Notifications (kein id-Feld, z.B. notifications/initialized)
+  // bekommen keine Antwort – nur 202 ohne Body.
+  if (id === undefined) {
+    return new Response(null, { status: 202, headers: CORS_HEADERS });
+  }
+
   if (method === "initialize") {
     return jsonRpc(id, {
       protocolVersion: "2025-03-26",
