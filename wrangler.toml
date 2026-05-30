@@ -8,3 +8,4 @@ binding = "AI"
 [[rules]]
 type = "Text"
 globs = ["**/*.md"]
+fallthrough = true
