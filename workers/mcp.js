@@ -83,7 +83,7 @@ async function handleChat(request, env) {
     ...(body.messages || []),
   ];
 
-  const stream = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+  const stream = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
     messages,
     stream: true,
     max_tokens: 512,
