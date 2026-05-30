@@ -1,11 +1,11 @@
 [[redirects]]
   from = "/wrangler.toml"
-  to = "/"
+  to = "/404.html"
   status = 404
   force = true
 
 [[redirects]]
   from = "/workers/*"
-  to = "/"
+  to = "/404.html"
   status = 404
   force = true
