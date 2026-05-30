@@ -3,3 +3,4 @@ screenshot*.jpg
 screenshot*.jpeg
 screenshot*.webp
 .playwright-mcp/
+.wrangler/
