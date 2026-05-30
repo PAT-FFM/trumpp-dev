@@ -4,3 +4,7 @@ compatibility_date = "2025-05-30"
 
 [ai]
 binding = "AI"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]

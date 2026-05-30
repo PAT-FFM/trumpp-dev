@@ -1,3 +1,5 @@
+import CV from './cv.md';
+
 const PROTOCOL_VERSION = "2025-06-18";
 const SUPPORTED_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
@@ -48,8 +50,8 @@ Important rules:
 
 Contact: info@trumpp.dev | LinkedIn: https://www.linkedin.com/in/peter-trumpp-8487b0243/
 
-Peter's profile:
-${JSON.stringify(PROFILE, null, 2)}`;
+Peter's profile and CV:
+${CV}`;
 
 function reply(payload, { acceptsSse, sessionId } = {}) {
   const headers = { ...CORS_HEADERS, "Mcp-Protocol-Version": PROTOCOL_VERSION };
