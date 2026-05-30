@@ -148,5 +148,111 @@
     const spans = document.querySelectorAll('.tagline span');
     spans[crypto.getRandomValues(new Uint32Array(1))[0] % spans.length].classList.add('active');
   </script>
+
+  <div id="chat-widget">
+    <button id="chat-toggle" aria-label="Chat öffnen">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    </button>
+    <div id="chat-window" hidden>
+      <div id="chat-header">
+        <span>Frag mich was über Peter</span>
+        <button id="chat-close" aria-label="Chat schließen">✕</button>
+      </div>
+      <div id="chat-messages"></div>
+      <div id="chat-input-area">
+        <input type="text" id="chat-input" placeholder="Deine Frage…" autocomplete="off">
+        <button id="chat-send" aria-label="Senden">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const CHAT_URL = "https://trumpp-dev-mcp.trumpp-dev.workers.dev/chat";
+      let history = [];
+      let isLoading = false;
+
+      const toggle   = document.getElementById("chat-toggle");
+      const chatWin  = document.getElementById("chat-window");
+      const closeBtn = document.getElementById("chat-close");
+      const messages = document.getElementById("chat-messages");
+      const input    = document.getElementById("chat-input");
+      const sendBtn  = document.getElementById("chat-send");
+
+      toggle.addEventListener("click", () => {
+        const hidden = chatWin.hasAttribute("hidden");
+        if (hidden) { chatWin.removeAttribute("hidden"); input.focus(); }
+        else chatWin.setAttribute("hidden", "");
+      });
+      closeBtn.addEventListener("click", () => chatWin.setAttribute("hidden", ""));
+      sendBtn.addEventListener("click", submit);
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+      });
+
+      function appendMsg(role, text) {
+        const div = document.createElement("div");
+        div.className = "chat-msg " + role;
+        div.textContent = text;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+        return div;
+      }
+
+      async function submit() {
+        const text = input.value.trim();
+        if (!text || isLoading) return;
+        input.value = "";
+        isLoading = true;
+        sendBtn.disabled = true;
+
+        history.push({ role: "user", content: text });
+        appendMsg("user", text);
+        const aiDiv = appendMsg("assistant", "…");
+        let aiText = "";
+
+        try {
+          const res = await fetch(CHAT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messages: history }),
+          });
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const data = line.slice(6).trim();
+              if (data === "[DONE]") break;
+              try {
+                const token = JSON.parse(data).response;
+                if (token) { aiText += token; aiDiv.textContent = aiText; messages.scrollTop = messages.scrollHeight; }
+              } catch {}
+            }
+          }
+          history.push({ role: "assistant", content: aiText });
+        } catch {
+          aiDiv.textContent = "Fehler – bitte nochmal versuchen.";
+        } finally {
+          isLoading = false;
+          sendBtn.disabled = false;
+          input.focus();
+        }
+      }
+    })();
+  </script>
 </body>
 </html>

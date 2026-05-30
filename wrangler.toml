@@ -1,3 +1,6 @@
 name = "trumpp-dev-mcp"
 main = "workers/mcp.js"
 compatibility_date = "2025-05-30"
+
+[ai]
+binding = "AI"

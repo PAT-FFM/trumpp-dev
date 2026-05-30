@@ -37,6 +37,15 @@ const TOOLS = [
   },
 ];
 
+const SYSTEM_PROMPT = `You are a helpful assistant on the website of Peter Trumpp, a freelance software engineer and IT consultant based in Koblenz, Germany.
+Answer visitor questions about Peter's services, expertise, approach, and availability.
+Be concise and professional — this is a website chat widget, not an essay.
+Always respond in the same language the user writes in (German or English).
+For contact, direct users to: info@trumpp.dev or LinkedIn: https://www.linkedin.com/in/peter-trumpp-8487b0243/
+
+Peter's profile:
+${JSON.stringify(PROFILE, null, 2)}`;
+
 function reply(payload, { acceptsSse, sessionId } = {}) {
   const headers = { ...CORS_HEADERS, "Mcp-Protocol-Version": PROTOCOL_VERSION };
   if (sessionId) headers["Mcp-Session-Id"] = sessionId;
@@ -54,13 +63,49 @@ const result = (id, res, opts) => reply({ jsonrpc: "2.0", id, result: res }, opt
 const rpcError = (id, code, message, opts) =>
   reply({ jsonrpc: "2.0", id, error: { code, message } }, opts);
 
+async function handleChat(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response("Bad Request", { status: 400, headers: CORS_HEADERS });
+  }
+
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...(body.messages || []),
+  ];
+
+  const stream = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+    messages,
+    stream: true,
+    max_tokens: 512,
+  });
+
+  return new Response(stream, {
+    headers: {
+      ...CORS_HEADERS,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+    },
+  });
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
+    const pathname = new URL(request.url).pathname;
     const accept = request.headers.get("Accept") || "";
     const acceptsSse = accept.includes("text/event-stream");
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
+    if (pathname === "/chat") {
+      if (request.method !== "POST") {
+        return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
+      }
+      return handleChat(request, env);
     }
 
     if (request.method === "GET") {
