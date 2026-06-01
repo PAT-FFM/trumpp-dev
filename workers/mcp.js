@@ -70,13 +70,19 @@ const result = (id, res, opts) => reply({ jsonrpc: "2.0", id, result: res }, opt
 const rpcError = (id, code, message, opts) =>
   reply({ jsonrpc: "2.0", id, error: { code, message } }, opts);
 
-async function handleChat(request, env) {
+async function handleChat(request, env, ctx) {
   let body;
   try {
     body = await request.json();
   } catch {
     return new Response("Bad Request", { status: 400, headers: CORS_HEADERS });
   }
+
+  const sessionId = body.sessionId || null;
+  const userMessage = [...(body.messages || [])].reverse().find(m => m.role === "user")?.content || "";
+  const ip = request.headers.get("CF-Connecting-IP");
+  const country = request.cf?.country || null;
+  const userAgent = request.headers.get("User-Agent");
 
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -89,7 +95,49 @@ async function handleChat(request, env) {
     max_tokens: 512,
   });
 
-  return new Response(stream, {
+  const [clientStream, logStream] = stream.tee();
+
+  ctx.waitUntil(
+    (async () => {
+      const reader = logStream.getReader();
+      const decoder = new TextDecoder();
+      let buf = "", assistantText = "";
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") break;
+            try { const t = JSON.parse(data).response; if (t) assistantText += t; } catch {}
+          }
+        }
+      } catch {}
+      await fetch(`${env.SUPABASE_URL}/rest/v1/chat_logs`, {
+        method: "POST",
+        headers: {
+          apikey: env.SUPABASE_SECRET_KEY,
+          Authorization: `Bearer ${env.SUPABASE_SECRET_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          user_message: userMessage,
+          assistant_message: assistantText,
+          ip,
+          country,
+          user_agent: userAgent,
+        }),
+      });
+    })()
+  );
+
+  return new Response(clientStream, {
     headers: {
       ...CORS_HEADERS,
       "Content-Type": "text/event-stream",
@@ -99,7 +147,7 @@ async function handleChat(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname;
     const accept = request.headers.get("Accept") || "";
     const acceptsSse = accept.includes("text/event-stream");
@@ -112,7 +160,7 @@ export default {
       if (request.method !== "POST") {
         return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
       }
-      return handleChat(request, env);
+      return handleChat(request, env, ctx);
     }
 
     if (request.method === "GET") {
