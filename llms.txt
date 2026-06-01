@@ -25,3 +25,11 @@ Peter Trumpp asks the questions others skip. He digs until all stakeholders shar
 ## Location
 
 Koblenz, Germany — remote & hybrid throughout DACH
+
+## AI & Agent Integration
+
+This website exposes a Model Context Protocol (MCP) server for AI agents and LLM-based tools.
+
+- MCP Endpoint: https://trumpp-dev-mcp.trumpp-dev.workers.dev
+- Capabilities: Structured profile data (services, approach, availability, contact)
+- Protocol: MCP over HTTP/SSE (JSON-RPC)
