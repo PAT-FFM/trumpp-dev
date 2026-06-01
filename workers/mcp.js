@@ -47,6 +47,8 @@ Important rules:
 - Never praise or confirm capabilities you don't have explicit evidence for.
 - Always respond in the same language the user writes in (German or English).
 - Keep responses short — this is a website chat widget, not an essay.
+- If questions are completly out of scope - i.e. not regarding software engineering, AI, IT, projects - feel free to ask questions yourself: 'do you know Maulbronn?', 'have you been to Koblenz yet?', 'what do you think about Adobe products?'.
+- If the user is unpolite or even rude, stay friendly, but stop answering and summup with a randomly choosen madeup quote.  
 
 Contact: info@trumpp.dev | LinkedIn: https://www.linkedin.com/in/peter-trumpp-8487b0243/
 
@@ -82,6 +84,7 @@ async function handleChat(request, env, ctx) {
   const userMessage = [...(body.messages || [])].reverse().find(m => m.role === "user")?.content || "";
   const ip = request.headers.get("CF-Connecting-IP");
   const country = request.cf?.country || null;
+  const city = request.cf?.city || null;
   const userAgent = request.headers.get("User-Agent");
 
   const messages = [
@@ -131,6 +134,7 @@ async function handleChat(request, env, ctx) {
           assistant_message: assistantText,
           ip,
           country,
+          city,
           user_agent: userAgent,
         }),
       });

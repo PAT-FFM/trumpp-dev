@@ -68,7 +68,7 @@ My focus: AI-driven solutions for complex data and process landscapes, combined 
 I bridge business, development and operations to deliver pragmatic solutions in complex environments — and know from the inside why most projects fail before they do.
 
 ## Angestrebte Rahmenbedinungen
-- Remote oder Hybrid im 15-km-Umfeld von Koblenz – keine Reisetätigkeit
+- Remote oder Hybrid im Umfeld von Koblenz – keine Reisetätigkeit
 - Festanstellung oder Freelance (beides ok)
 - Keine Leitungsfunktion
 - Teamgröße 5–15
