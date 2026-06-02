@@ -41,7 +41,7 @@
         Peter Trumpp Consulting<br />
         Hohenzollernstr. 116<br />
 		56068 Koblenz<br />
-		Email: info [at] trumpp [punkt] dev <br />
+		Email: <span id="email-link"><noscript>info [at] trumpp [punkt] dev</noscript></span><br />
 		Umsatzsteuer-ID gemäß § 27a UStG: DE455856454</p>
 	    <h2 id="haftung-fur-inhalte">Haftung für Inhalte</h2>
 		<p>Als Diensteanbieter bin ich gemäß § 7 Abs. 1 DDG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. 
@@ -116,6 +116,23 @@
 		(Landesbeauftragte für den Datenschutz Rheinland-Pfalz).</p>
 	</header>
   </div>
+
+  <script>
+    // E-Mail-Adresse erst im Browser zusammensetzen, damit sie nicht als
+    // Klartext im Quelltext steht (Schutz vor automatischem Spam-Harvesting).
+    (function () {
+      var user = 'info';
+      var domain = 'trumpp' + '.' + 'dev';
+      var addr = user + '@' + domain;
+      var el = document.getElementById('email-link');
+      if (!el) return;
+      var link = document.createElement('a');
+      link.href = 'mailto:' + addr;
+      link.textContent = addr;
+      el.textContent = '';
+      el.appendChild(link);
+    })();
+  </script>
 
 </body>
 </html>
