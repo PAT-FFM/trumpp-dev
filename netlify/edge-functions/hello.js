@@ -24,7 +24,6 @@ export default async (req, context) => {
       url: url,
       city: context.geo?.city || null,
       country: context.geo?.country?.name || null,
-      ip: context.ip || null,
       user_agent: userAgent
     })
   });

@@ -94,7 +94,6 @@ async function handleChat(request, env, ctx) {
 
   const sessionId = body.sessionId || null;
   const userMessage = [...(body.messages || [])].reverse().find(m => m.role === "user")?.content || "";
-  const ip = request.headers.get("CF-Connecting-IP");
   const country = request.cf?.country || null;
   const city = request.cf?.city || null;
   const userAgent = request.headers.get("User-Agent");
@@ -144,7 +143,6 @@ async function handleChat(request, env, ctx) {
           session_id: sessionId,
           user_message: userMessage,
           assistant_message: assistantText,
-          ip,
           country,
           city,
           user_agent: userAgent,
