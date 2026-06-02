@@ -97,6 +97,16 @@ async function handleChat(request, env, ctx) {
     return new Response("Forbidden", { status: 403, headers: CORS_HEADERS });
   }
 
+  // Pro IP drosseln (transienter Key, wird nicht gespeichert) – schützt die
+  // Workers-AI-Tagesquota vor einem einzelnen Angreifer.
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const { success } = await env.CHAT_RATE_LIMITER.limit({ key: ip });
+  if (success === false) {
+    // Nur bei explizitem Limit drosseln; im Zweifel durchlassen (fail-open),
+    // damit ein interner Fehler das Chat-Widget nicht komplett lahmlegt.
+    return new Response("Too Many Requests", { status: 429, headers: CORS_HEADERS });
+  }
+
   let body;
   try {
     body = await request.json();

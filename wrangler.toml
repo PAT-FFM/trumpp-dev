@@ -5,6 +5,14 @@ compatibility_date = "2025-05-30"
 [ai]
 binding = "AI"
 
+# Drosselt /chat pro IP – schützt die Workers-AI-Tagesquota vor Missbrauch.
+[[ratelimits]]
+name = "CHAT_RATE_LIMITER"
+namespace_id = "1001"
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
 [[rules]]
 type = "Text"
 globs = ["**/*.md"]
