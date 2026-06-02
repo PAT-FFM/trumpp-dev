@@ -84,7 +84,19 @@ const result = (id, res, opts) => reply({ jsonrpc: "2.0", id, result: res }, opt
 const rpcError = (id, code, message, opts) =>
   reply({ jsonrpc: "2.0", id, error: { code, message } }, opts);
 
+const ALLOWED_ORIGINS = new Set([
+  "https://trumpp.dev",
+  "https://www.trumpp.dev",
+]);
+
 async function handleChat(request, env, ctx) {
+  // Nur Anfragen von der eigenen Domain bedienen – verhindert Browser-Missbrauch
+  // des Workers als kostenloser LLM-Proxy von fremden Seiten.
+  const origin = request.headers.get("Origin");
+  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    return new Response("Forbidden", { status: 403, headers: CORS_HEADERS });
+  }
+
   let body;
   try {
     body = await request.json();

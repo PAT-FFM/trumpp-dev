@@ -157,6 +157,18 @@
       location.href = "/stats";
     }
 
+    // Zellen ausschließlich über textContent füllen – niemals user-kontrollierte
+    // Werte (User-Agent, Stadt, URL) als HTML interpretieren.
+    function addRow(table, cells) {
+      const tr = table.insertRow();
+      for (const c of cells) {
+        const td = tr.insertCell();
+        if (c.className) td.className = c.className;
+        const target = c.small ? td.appendChild(document.createElement("small")) : td;
+        target.textContent = c.text;
+      }
+    }
+
     async function load() {
       const pw = getCookie("stats_auth");
       const res = await fetch("/stats/data", { headers: { "x-stats-auth": pw } });
@@ -190,25 +202,36 @@
       // Städte
       const citiesTable = document.getElementById("cities");
       cities.forEach(c => {
-        const tr = citiesTable.insertRow();
-        tr.innerHTML = `<td>${c.city || "–"}</td><td>${c.country || "–"}</td><td>${c.count}</td>`;
+        addRow(citiesTable, [
+          { text: c.city || "–" },
+          { text: c.country || "–" },
+          { text: c.count },
+        ]);
       });
 
       // Besucher aus Deutschland
       const germanTable = document.getElementById("german");
       german.forEach(g => {
-        const tr = germanTable.insertRow();
-        tr.innerHTML = `<td>${g.city || "–"}</td><td><small>${g.user_agent || "–"}</small></td><td>${g.count}</td>`;
+        addRow(germanTable, [
+          { text: g.city || "–" },
+          { text: g.user_agent || "–", small: true },
+          { text: g.count },
+        ]);
       });
 
       // Letzte Besuche
       const recentTable = document.getElementById("recent");
       recent.forEach(r => {
-        const tr = recentTable.insertRow();
         const time = new Date(r.visited_at).toLocaleString("de-DE");
-        const path = new URL(r.url).pathname;
-        tr.innerHTML = `<td>${time}</td><td class="url">${path}</td>
-                        <td>${r.city || "–"}</td><td>${r.country || "–"}</td><td><small>${r.user_agent || "–"}</small></td>`;
+        let path = r.url;
+        try { path = new URL(r.url).pathname; } catch {}
+        addRow(recentTable, [
+          { text: time },
+          { text: path, className: "url" },
+          { text: r.city || "–" },
+          { text: r.country || "–" },
+          { text: r.user_agent || "–", small: true },
+        ]);
       });
     }
 
