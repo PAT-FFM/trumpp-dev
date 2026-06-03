@@ -105,6 +105,9 @@
         <button id="chat-close" aria-label="Chat schließen">✕</button>
       </div>
       <div id="chat-messages"></div>
+      <div id="chat-tools">
+        <button id="chat-marketing" type="button" aria-pressed="false" title="Lässt Peter im Marketing-Sprech antworten – ironisch gemeint.">Marketing-Sprech 🚀</button>
+      </div>
       <div id="chat-input-area">
         <input type="text" id="chat-input" placeholder="Deine Frage…" autocomplete="off">
         <button id="chat-send" aria-label="Senden">
@@ -126,13 +129,20 @@
       })();
       let history = [];
       let isLoading = false;
+      let mode = null;
 
-      const toggle   = document.getElementById("chat-toggle");
-      const chatWin  = document.getElementById("chat-window");
-      const closeBtn = document.getElementById("chat-close");
-      const messages = document.getElementById("chat-messages");
-      const input    = document.getElementById("chat-input");
-      const sendBtn  = document.getElementById("chat-send");
+      const toggle    = document.getElementById("chat-toggle");
+      const chatWin   = document.getElementById("chat-window");
+      const closeBtn  = document.getElementById("chat-close");
+      const messages  = document.getElementById("chat-messages");
+      const input     = document.getElementById("chat-input");
+      const sendBtn   = document.getElementById("chat-send");
+      const marketing = document.getElementById("chat-marketing");
+
+      marketing.addEventListener("click", () => {
+        mode = mode === "marketing" ? null : "marketing";
+        marketing.setAttribute("aria-pressed", mode === "marketing" ? "true" : "false");
+      });
 
       toggle.addEventListener("click", () => {
         const hidden = chatWin.hasAttribute("hidden");
@@ -170,7 +180,7 @@
           const res = await fetch(CHAT_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages: history, sessionId }),
+            body: JSON.stringify({ messages: history, sessionId, mode }),
           });
           const reader = res.body.getReader();
           const decoder = new TextDecoder();

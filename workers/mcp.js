@@ -68,6 +68,21 @@ Contact: info@trumpp.dev | LinkedIn: https://www.linkedin.com/in/peter-trumpp-84
 Peter's profile and CV:
 ${CV}`;
 
+// Whitelist optionaler Tonfall-Modi. Der Client schickt nur einen Key (body.mode),
+// niemals freien Prompt-Text – das verhindert Prompt-Injection über den Worker.
+// Unbekannter/fehlender Key => kein Zusatz => normaler Peter. Die Hard Rules oben
+// bleiben in jedem Fall gültig; der Modifier verändert nur den Stil, nicht die Fakten.
+const STYLE_MODIFIERS = {
+  marketing:
+    "Style override: Antworte in überzogenem Marketing-/Buzzword-Sprech " +
+    "(Synergien, end-to-end, skalierbar, AI-Journey, Stakeholder-Alignment, " +
+    "Best-in-Class …), bewusst ironisch und aufgebläht. WICHTIG: Nur die *Verpackung* " +
+    "aufblasen – dieselben Fakten, KEINE erfundenen Skills, Projekte oder Referenzen. " +
+    "Alle übrigen Regeln (nur Fakten aus dem CV, Datenschutzfragen → Impressum, gleiche " +
+    "Sprache wie der Besucher) gelten unverändert weiter.",
+};
+const MARKETING_MAX_TOKENS = 280;
+
 function reply(payload, { acceptsSse, sessionId } = {}) {
   const headers = { ...CORS_HEADERS, "Mcp-Protocol-Version": PROTOCOL_VERSION };
   if (sessionId) headers["Mcp-Session-Id"] = sessionId;
@@ -121,8 +136,9 @@ async function handleChat(request, env, ctx) {
   const city = request.cf?.city || null;
   const userAgent = request.headers.get("User-Agent");
 
+  const modifier = STYLE_MODIFIERS[body.mode] || "";
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: SYSTEM_PROMPT + (modifier ? "\n\n" + modifier : "") },
     ...(body.messages || []),
   ];
 
@@ -131,7 +147,9 @@ async function handleChat(request, env, ctx) {
     stream = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages,
       stream: true,
-      max_tokens: 200,
+      // Geschwurbel fällt länger aus, daher höherer Deckel – aber weiter gedeckelt,
+      // damit der Gag knackig bleibt und die Neuronen-Quota geschont wird.
+      max_tokens: modifier ? MARKETING_MAX_TOKENS : 200,
     });
   } catch (err) {
     // z. B. erschöpfte Tagesquota oder Auslastung – sauber als freundliche
