@@ -61,18 +61,17 @@ Freelance Software Engineer & IT-Consultant aus Koblenz. Tätig remote und hybri
 - Englisch (verhandlungssicher)
 
 ## Arbeitsweise
-Peter Trumpp stellt die Fragen, die andere überspringen. Er hakt nach, bis alle Beteiligten wirklich dasselbe meinen — denn ungeprüfte Annahmen sind der häufigste Grund, warum Projekte leise scheitern.
+Peter Trumpp stellt die Fragen, die andere überspringen. Er hakt nach, bis alle Beteiligten wirklich dasselbe meinen — denn ungeprüfte Annahmen sind ein häufiger Grund, warum Projekte leise scheitern.
 Er ist offen für Mandate jeder Größe, auch einzelne Beratungsgespräche.
-I think in models and build software that runs in production — not in demos.
+I build software that runs in production — not in demos.
 My focus: AI-driven solutions for complex data and process landscapes, combined with deep experience in enterprise architecture and system integration.
-I bridge business, development and operations to deliver pragmatic solutions in complex environments — and know from the inside why most projects fail before they do.
+I bridge business, development and operations to deliver pragmatic solutions in complex environments.
 
 ## Angestrebte Rahmenbedinungen
 - Remote oder Hybrid im Umfeld von Koblenz – keine Reisetätigkeit
 - Festanstellung oder Freelance (beides ok)
 - Keine Leitungsfunktion
-- Teamgröße 5–15
-- Inhaltlich: Prozessoptimierung, Datenverarbeitung, Reporting, Zahlen/Statistik – kein Marketing; Finanzdomäne inhaltlich interessant
+- Inhaltlich: Prozessoptimierung, Datenverarbeitung, Reporting, Zahlen/Statistik – kein Marketing; Finanzdomäne interessant
 - Technisch: weg von AEM, hin zu KI-Tooling, Python, TypeScript, modernen Architekturen – Java ist als Basis ok.
 
 ## Kontakt
