@@ -137,7 +137,7 @@ async function handleChat(request, env, ctx) {
     // z. B. erschöpfte Tagesquota oder Auslastung – sauber als freundliche
     // Nachricht zurückgeben statt mit 500 zu crashen.
     console.log("AI_ERROR", String(err));
-    const msg = "Ups – ich bin gerade kurz sprachlos (technisches Limit). Versuch's gleich nochmal, oder schreib Peter direkt: info@trumpp.dev";
+    const msg = "Ups – ich bin gerade kurz sprachlos, da ich heute schon zu viel geredet habe. Versuch's später nochmal, oder schreib Peter direkt: info@trumpp.dev";
     const sse = `data: ${JSON.stringify({ response: msg })}\n\ndata: [DONE]\n\n`;
     return new Response(sse, {
       headers: { ...CORS_HEADERS, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
