@@ -109,7 +109,7 @@
         <button id="chat-marketing" type="button" aria-pressed="false" title="Lässt Peter im Marketing-Sprech antworten – ironisch gemeint.">Marketing-Sprech 🚀</button>
       </div>
       <div id="chat-input-area">
-        <input type="text" id="chat-input" placeholder="Deine Frage…" autocomplete="off">
+        <input type="text" id="chat-input" placeholder="Deine Frage…" autocomplete="off" maxlength="512">
         <button id="chat-send" aria-label="Senden">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -165,7 +165,7 @@
       }
 
       async function submit() {
-        const text = input.value.trim();
+        const text = input.value.trim().slice(0, 512);
         if (!text || isLoading) return;
         input.value = "";
         isLoading = true;

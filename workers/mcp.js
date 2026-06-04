@@ -83,6 +83,50 @@ const STYLE_MODIFIERS = {
 };
 const MARKETING_MAX_TOKENS = 280;
 
+// Härtung gegen beeinflussbare Eingaben: Request-Body deckeln (fängt den
+// "1 GB user_message"-Fall ab, bevor überhaupt geparst wird) und beeinflussbare
+// Felder (user_message, user_agent) auf 512 Zeichen kappen – für DB und Mail.
+const MAX_BODY_BYTES = 65536;
+const MAX_FIELD_LEN = 512;
+const NOTIFY_TO = "notify@trumpp.dev";
+const truncate = (s, n = MAX_FIELD_LEN) => (typeof s === "string" ? s.slice(0, n) : s);
+
+// Benachrichtigt per E-Mail über Resend, wenn jemand im Chat etwas absendet.
+// Zwei bewusste Drosseln: (1) nur beim ersten Turn einer Session – über die
+// Nachrichtenanzahl erkannt, zustandsfrei; (2) global max. 1 Mail / 10 Min über
+// die Cache API (caches.default) – der Request dient dabei NUR als Cache-Schlüssel,
+// es wird kein HTTP-Request an die URL gesendet. Fail-safe gegen Massenmails:
+// die Drossel wird vor dem Versand gesetzt, lieber eine Mail verschlucken als fluten.
+async function maybeNotifyByEmail(env, d) {
+  if (!d.isFirstTurn) return;
+  if (!env.RESEND_API_KEY) return;
+  const cache = caches.default;
+  const throttleKey = new Request("https://notify.trumpp.dev/chat-throttle");
+  if (await cache.match(throttleKey)) return;
+  await cache.put(throttleKey, new Response("1", { headers: { "Cache-Control": "max-age=600" } }));
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "trumpp.dev Chat <onboarding@resend.dev>",
+        to: NOTIFY_TO,
+        subject: `💬 Neue Chat-Nachricht${d.city ? " aus " + d.city : ""}`,
+        text:
+          `Nachricht:\n${d.userMessage}\n\n` +
+          `Stadt: ${d.city || "?"}\nLand: ${d.country || "?"}\n` +
+          `User-Agent: ${d.userAgent || "?"}\n` +
+          `Session: ${d.sessionId || "?"}\nZeit: ${new Date().toISOString()}`,
+      }),
+    });
+  } catch (err) {
+    console.log("NOTIFY_ERROR", String(err));
+  }
+}
+
 function reply(payload, { acceptsSse, sessionId } = {}) {
   const headers = { ...CORS_HEADERS, "Mcp-Protocol-Version": PROTOCOL_VERSION };
   if (sessionId) headers["Mcp-Session-Id"] = sessionId;
@@ -123,6 +167,12 @@ async function handleChat(request, env, ctx) {
     return new Response("Too Many Requests", { status: 429, headers: CORS_HEADERS });
   }
 
+  // Eigener Schutz-Layer vor dem Parsen: übergroße Bodies sofort abweisen.
+  const declaredLen = Number(request.headers.get("Content-Length") || 0);
+  if (declaredLen > MAX_BODY_BYTES) {
+    return new Response("Payload Too Large", { status: 413, headers: CORS_HEADERS });
+  }
+
   let body;
   try {
     body = await request.json();
@@ -130,17 +180,28 @@ async function handleChat(request, env, ctx) {
     return new Response("Bad Request", { status: 400, headers: CORS_HEADERS });
   }
 
+  // Beeinflussbare User-Nachrichten auf 512 Zeichen kappen – wirkt für KI-Input,
+  // DB-Insert und Mail gleichermaßen.
+  const safeMessages = (body.messages || []).map(m =>
+    m.role === "user" ? { ...m, content: truncate(String(m.content ?? "")) } : m
+  );
   const sessionId = body.sessionId || null;
-  const userMessage = [...(body.messages || [])].reverse().find(m => m.role === "user")?.content || "";
+  const userMessage = [...safeMessages].reverse().find(m => m.role === "user")?.content || "";
   const country = request.cf?.country || null;
   const city = request.cf?.city || null;
-  const userAgent = request.headers.get("User-Agent");
+  const userAgent = truncate(request.headers.get("User-Agent") || "");
+  const userTurns = safeMessages.filter(m => m.role === "user").length; // == 1 → erster Turn
 
   const modifier = STYLE_MODIFIERS[body.mode] || "";
   const messages = [
     { role: "system", content: SYSTEM_PROMPT + (modifier ? "\n\n" + modifier : "") },
-    ...(body.messages || []),
+    ...safeMessages,
   ];
+
+  // Benachrichtigung läuft unabhängig vom Stream-Logging (braucht die KI-Antwort nicht).
+  ctx.waitUntil(maybeNotifyByEmail(env, {
+    userMessage, userAgent, city, country, sessionId, isFirstTurn: userTurns === 1,
+  }));
 
   let stream;
   try {
