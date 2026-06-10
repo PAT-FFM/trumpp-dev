@@ -88,19 +88,20 @@
   
   <script>
     (function () {
-      const TAGLINES = {
-        morning:   ["Dawn patrol. The lineup is empty and perfect.", "The tide is turning. Out early to meet it.", "First light, flat water. The day starts clean.", "Watching the horizon. Ready for the next wave."],
-        midday:    ["High noon, full swell. Right where I want to be.", "Sun overhead, ocean on point. Full focus.", "In the lineup. No shade, no shortcuts.", "In the lineup for the next wave."],
-        afternoon: ["The day has momentum now. Riding it.", "Afternoon sets, long and steady. Still in the water.", "Best sets often come late. Still watching.", "Positioned in the lineup. Preparing for what's next."],
-        evening:   ["Golden hour offshore. The day peaked well.", "Last light on the water. The day delivered.", "Evening glass. A clean session behind me."],
-        night:     ["Quiet swell in the dark. Tomorrow looks good.", "The ocean doesn't sleep. Neither do I.", "Deep water, no distractions. The real work happens now."],
-      };
-      function slot(h) {
-        return h >= 6 && h < 11 ? "morning" : h >= 11 && h < 15 ? "midday" : h >= 15 && h < 19 ? "afternoon" : h >= 19 && h < 23 ? "evening" : "night";
-      }
-      const pool = TAGLINES[slot(new Date().getHours())];
+      const TAGLINES = [
+        "Watching the horizon. Ready for the next wave.",
+        "Positioned in the lineup. Preparing for what's next.",
+        "In the lineup for the next wave.",
+        "In the lineup. No shade, no shortcuts.",
+        "The day has momentum now. Riding it.",
+        "Best sets often come late. Still watching.",
+        "Golden hour offshore. The day peaked well.",
+        "Last light on the water. The day delivered.",
+        "Evening glass. A clean session behind me.",
+        "Quiet swell in the dark. Tomorrow looks good.",
+      ];
       const span = document.querySelector('.tagline span');
-      span.textContent = pool[crypto.getRandomValues(new Uint32Array(1))[0] % pool.length];
+      span.textContent = TAGLINES[crypto.getRandomValues(new Uint32Array(1))[0] % TAGLINES.length];
       span.classList.add('active');
     })();
   </script>
