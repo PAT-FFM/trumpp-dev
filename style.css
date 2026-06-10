@@ -297,6 +297,35 @@ footer a{
 
 #chat-send:disabled { opacity: 0.35; cursor: default; }
 
+#chat-mic {
+  background: none;
+  color: #aaa;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+#chat-mic:hover { color: #1a1a1a; border-color: #1a1a1a; }
+#chat-mic:disabled { opacity: 0.35; cursor: default; }
+
+#chat-mic.recording {
+  color: #d44;
+  border-color: #d44;
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
 @media (max-width: 400px) {
   #chat-window {
     width: calc(100vw - 2rem);
