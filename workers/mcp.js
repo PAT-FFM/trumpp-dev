@@ -274,57 +274,6 @@ async function handleChat(request, env, ctx) {
   });
 }
 
-const TAGLINES = {
-  morning: [
-    "Dawn patrol. The lineup is empty and perfect.",
-    "The tide is turning. Out early to meet it.",
-    "First light, flat water. The day starts clean.",
-    "Watching the horizon. Ready for the next wave.",
-  ],
-  midday: [
-    "High noon, full swell. Right where I want to be.",
-    "Sun overhead, ocean on point. Full focus.",
-    "In the lineup. No shade, no shortcuts.",
-    "In the lineup for the next wave.",
-  ],
-  afternoon: [
-    "The day has momentum now. Riding it.",
-    "Afternoon sets, long and steady. Still in the water.",
-    "Best sets often come late. Still watching.",
-    "Positioned in the lineup. Preparing for what's next.",
-  ],
-  evening: [
-    "Golden hour offshore. The day peaked well.",
-    "Last light on the water. The day delivered.",
-    "Evening glass. A clean session behind me.",
-  ],
-  night: [
-    "Quiet swell in the dark. Tomorrow looks good.",
-    "The ocean doesn't sleep. Neither do I.",
-    "Deep water, no distractions. The real work happens now.",
-  ],
-};
-
-function getSlot(h) {
-  if (h >= 6  && h < 11) return "morning";
-  if (h >= 11 && h < 15) return "midday";
-  if (h >= 15 && h < 19) return "afternoon";
-  if (h >= 19 && h < 23) return "evening";
-  return "night";
-}
-
-// Schlägt eine passende Tagline für die aktuelle Tageszeit nach.
-// Der Client schickt seine lokale Stunde als ?h= mit, damit die Zeitzone stimmt.
-function handleTagline(request) {
-  const raw = parseInt(new URL(request.url).searchParams.get("h") ?? "");
-  const hour = Number.isInteger(raw) && raw >= 0 && raw < 24 ? raw : new Date().getUTCHours();
-  const pool = TAGLINES[getSlot(hour)];
-  const tagline = pool[Math.floor(Math.random() * pool.length)];
-  return new Response(JSON.stringify({ tagline }), {
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
-}
-
 export default {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname;
@@ -340,13 +289,6 @@ export default {
         return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
       }
       return handleChat(request, env, ctx);
-    }
-
-    if (pathname === "/tagline") {
-      if (request.method !== "GET") {
-        return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
-      }
-      return handleTagline(request);
     }
 
     if (request.method === "GET") {

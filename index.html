@@ -90,15 +90,22 @@
   
   <script>
     (function () {
+      const TAGLINES = {
+        morning:   ["Dawn patrol. The lineup is empty and perfect.", "The tide is turning. Out early to meet it.", "First light, flat water. The day starts clean.", "Watching the horizon. Ready for the next wave."],
+        midday:    ["High noon, full swell. Right where I want to be.", "Sun overhead, ocean on point. Full focus.", "In the lineup. No shade, no shortcuts.", "In the lineup for the next wave."],
+        afternoon: ["The day has momentum now. Riding it.", "Afternoon sets, long and steady. Still in the water.", "Best sets often come late. Still watching.", "Positioned in the lineup. Preparing for what's next."],
+        evening:   ["Golden hour offshore. The day peaked well.", "Last light on the water. The day delivered.", "Evening glass. A clean session behind me."],
+        night:     ["Quiet swell in the dark. Tomorrow looks good.", "The ocean doesn't sleep. Neither do I.", "Deep water, no distractions. The real work happens now."],
+      };
+      function slot(h) {
+        return h >= 6 && h < 11 ? "morning" : h >= 11 && h < 15 ? "midday" : h >= 15 && h < 19 ? "afternoon" : h >= 19 && h < 23 ? "evening" : "night";
+      }
+      const rnd = n => crypto.getRandomValues(new Uint32Array(1))[0] % n;
+      const pool = TAGLINES[slot(new Date().getHours())];
       const spans = document.querySelectorAll('.tagline span');
-      const chosen = spans[crypto.getRandomValues(new Uint32Array(1))[0] % spans.length];
+      const chosen = spans[rnd(spans.length)];
+      chosen.textContent = pool[rnd(pool.length)];
       chosen.classList.add('active');
-      // Situative tagline vom Worker: tauscht Text aus, solange der Span noch unsichtbar ist
-      // (Fade-in startet erst nach ~1.9 s). Bei Fehler bleibt der statische Text.
-      fetch(`https://trumpp-dev-mcp.trumpp-dev.workers.dev/tagline?h=${new Date().getHours()}`)
-        .then(r => r.ok ? r.json() : null)
-        .then(d => { if (d?.tagline) chosen.textContent = d.tagline; })
-        .catch(() => {});
     })();
   </script>
 
