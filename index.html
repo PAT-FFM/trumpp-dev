@@ -79,8 +79,6 @@
 
     <div class="tagline" aria-live="polite">
       <span>Watching the horizon. Ready for the next wave.</span>
-      <span>Positioned in the lineup. Preparing for what's next.</span>
-      <span>In the lineup for the next wave.</span>
     </div>
   </a>
   
@@ -100,12 +98,10 @@
       function slot(h) {
         return h >= 6 && h < 11 ? "morning" : h >= 11 && h < 15 ? "midday" : h >= 15 && h < 19 ? "afternoon" : h >= 19 && h < 23 ? "evening" : "night";
       }
-      const rnd = n => crypto.getRandomValues(new Uint32Array(1))[0] % n;
       const pool = TAGLINES[slot(new Date().getHours())];
-      const spans = document.querySelectorAll('.tagline span');
-      const chosen = spans[rnd(spans.length)];
-      chosen.textContent = pool[rnd(pool.length)];
-      chosen.classList.add('active');
+      const span = document.querySelector('.tagline span');
+      span.textContent = pool[crypto.getRandomValues(new Uint32Array(1))[0] % pool.length];
+      span.classList.add('active');
     })();
   </script>
 
