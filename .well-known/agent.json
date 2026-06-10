@@ -1,0 +1,36 @@
+{
+  "name": "Peter Trumpp – Freelance IT Consultant",
+  "description": "AI agent representing Peter Trumpp's professional profile. Ask about services, background, tech stack, and availability for consulting mandates in software architecture, AI integration, and IT consulting.",
+  "url": "https://trumpp-dev-mcp.trumpp-dev.workers.dev/",
+  "version": "1.0.0",
+  "provider": {
+    "organization": "Peter Trumpp Consulting",
+    "url": "https://trumpp.dev",
+    "contact": "info@trumpp.dev"
+  },
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "authentication": {
+    "schemes": []
+  },
+  "defaultInputModes": ["application/json"],
+  "defaultOutputModes": ["application/json"],
+  "skills": [
+    {
+      "id": "get_profile",
+      "name": "Get Professional Profile",
+      "description": "Returns Peter Trumpp's structured professional profile: services, approach, experience, and contact details.",
+      "tags": ["profile", "resume", "it-consulting", "software-engineering", "ai-integration"],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    }
+  ],
+  "mcp": {
+    "endpoint": "https://trumpp-dev-mcp.trumpp-dev.workers.dev/",
+    "protocolVersions": ["2025-06-18", "2025-03-26", "2024-11-05"],
+    "tools": ["get_profile"]
+  }
+}

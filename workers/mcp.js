@@ -274,6 +274,47 @@ async function handleChat(request, env, ctx) {
   });
 }
 
+// Generiert eine situative Tagline basierend auf Tageszeit und Jahreszeit,
+// gecacht per Hour-Slot in der Cache API (kein extra KV-Binding nötig).
+async function handleTagline(env) {
+  const now = new Date();
+  const h = now.getUTCHours();
+  const m = now.getUTCMonth();
+  const day = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][now.getUTCDay()];
+  const timeOfDay = h < 5 ? "night" : h < 9 ? "early morning" : h < 12 ? "morning"
+    : h < 14 ? "midday" : h < 18 ? "afternoon" : h < 21 ? "evening" : "late evening";
+  const season = m === 11 || m < 3 ? "winter" : m < 6 ? "spring" : m < 9 ? "summer" : "autumn";
+
+  const cache = caches.default;
+  const cacheKey = new Request(
+    `https://tagline.trumpp.dev/${now.getUTCFullYear()}-${String(m).padStart(2,"0")}-${String(now.getUTCDate()).padStart(2,"0")}-${String(h).padStart(2,"0")}`
+  );
+  const hit = await cache.match(cacheKey);
+  if (hit) {
+    return new Response(await hit.text(), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  }
+
+  let tagline = null;
+  try {
+    const result = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
+      messages: [
+        { role: "system", content: "Generate short atmospheric taglines. Reply with ONLY the tagline — no quotes, no explanation. Max 12 words, 1–2 short sentences, ending with a period." },
+        { role: "user", content: `Tagline for a freelance IT consultant's website. Now: ${day} ${timeOfDay}, ${season}. Use a water/surfing metaphor. Calm, confident, introspective. Model after: "Watching the horizon. Ready for the next wave." English only.` }
+      ],
+      max_tokens: 50,
+      stream: false,
+    });
+    tagline = result?.response?.trim().replace(/^["']|["']$/g, "") || null;
+  } catch (err) {
+    console.log("TAGLINE_ERROR", String(err));
+  }
+
+  const ttl = tagline ? 3600 : 300;
+  const body = JSON.stringify({ tagline });
+  await cache.put(cacheKey, new Response(body, { headers: { "Cache-Control": `max-age=${ttl}`, "Content-Type": "application/json" } }));
+  return new Response(body, { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname;
@@ -289,6 +330,13 @@ export default {
         return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
       }
       return handleChat(request, env, ctx);
+    }
+
+    if (pathname === "/tagline") {
+      if (request.method !== "GET") {
+        return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
+      }
+      return handleTagline(env);
     }
 
     if (request.method === "GET") {
