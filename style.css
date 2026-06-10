@@ -276,6 +276,8 @@ footer a{
   font-family: 'Inter', sans-serif;
   outline: none;
   transition: border-color 0.15s;
+  resize: none;
+  line-height: 1.4;
 }
 
 #chat-input:focus { border-color: #1a1a1a; }
