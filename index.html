@@ -95,7 +95,7 @@
       chosen.classList.add('active');
       // Situative tagline vom Worker: tauscht Text aus, solange der Span noch unsichtbar ist
       // (Fade-in startet erst nach ~1.9 s). Bei Fehler bleibt der statische Text.
-      fetch('https://trumpp-dev-mcp.trumpp-dev.workers.dev/tagline')
+      fetch(`https://trumpp-dev-mcp.trumpp-dev.workers.dev/tagline?h=${new Date().getHours()}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.tagline) chosen.textContent = d.tagline; })
         .catch(() => {});

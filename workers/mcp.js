@@ -274,45 +274,55 @@ async function handleChat(request, env, ctx) {
   });
 }
 
-// Generiert eine situative Tagline basierend auf Tageszeit und Jahreszeit,
-// gecacht per Hour-Slot in der Cache API (kein extra KV-Binding nötig).
-async function handleTagline(env) {
-  const now = new Date();
-  const h = now.getUTCHours();
-  const m = now.getUTCMonth();
-  const day = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][now.getUTCDay()];
-  const timeOfDay = h < 5 ? "night" : h < 9 ? "early morning" : h < 12 ? "morning"
-    : h < 14 ? "midday" : h < 18 ? "afternoon" : h < 21 ? "evening" : "late evening";
-  const season = m === 11 || m < 3 ? "winter" : m < 6 ? "spring" : m < 9 ? "summer" : "autumn";
+const TAGLINES = {
+  morning: [
+    "Dawn patrol. The lineup is empty and perfect.",
+    "The tide is turning. Out early to meet it.",
+    "First light, flat water. The day starts clean.",
+    "Watching the horizon. Ready for the next wave.",
+  ],
+  midday: [
+    "High noon, full swell. Right where I want to be.",
+    "Sun overhead, ocean on point. Full focus.",
+    "In the lineup. No shade, no shortcuts.",
+    "In the lineup for the next wave.",
+  ],
+  afternoon: [
+    "The day has momentum now. Riding it.",
+    "Afternoon sets, long and steady. Still in the water.",
+    "Best sets often come late. Still watching.",
+    "Positioned in the lineup. Preparing for what's next.",
+  ],
+  evening: [
+    "Golden hour offshore. The day peaked well.",
+    "Last light on the water. The day delivered.",
+    "Evening glass. A clean session behind me.",
+  ],
+  night: [
+    "Quiet swell in the dark. Tomorrow looks good.",
+    "The ocean doesn't sleep. Neither do I.",
+    "Deep water, no distractions. The real work happens now.",
+  ],
+};
 
-  const cache = caches.default;
-  const cacheKey = new Request(
-    `https://tagline.trumpp.dev/${now.getUTCFullYear()}-${String(m).padStart(2,"0")}-${String(now.getUTCDate()).padStart(2,"0")}-${String(h).padStart(2,"0")}`
-  );
-  const hit = await cache.match(cacheKey);
-  if (hit) {
-    return new Response(await hit.text(), { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
-  }
+function getSlot(h) {
+  if (h >= 6  && h < 11) return "morning";
+  if (h >= 11 && h < 15) return "midday";
+  if (h >= 15 && h < 19) return "afternoon";
+  if (h >= 19 && h < 23) return "evening";
+  return "night";
+}
 
-  let tagline = null;
-  try {
-    const result = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
-      messages: [
-        { role: "system", content: "Generate short atmospheric taglines. Reply with ONLY the tagline — no quotes, no explanation. Max 12 words, 1–2 short sentences, ending with a period." },
-        { role: "user", content: `Tagline for a freelance IT consultant's website. Now: ${day} ${timeOfDay}, ${season}. Use a water/surfing metaphor. Calm, confident, introspective. Model after: "Watching the horizon. Ready for the next wave." English only.` }
-      ],
-      max_tokens: 50,
-      stream: false,
-    });
-    tagline = result?.response?.trim().replace(/^["']|["']$/g, "") || null;
-  } catch (err) {
-    console.log("TAGLINE_ERROR", String(err));
-  }
-
-  const ttl = tagline ? 3600 : 300;
-  const body = JSON.stringify({ tagline });
-  await cache.put(cacheKey, new Response(body, { headers: { "Cache-Control": `max-age=${ttl}`, "Content-Type": "application/json" } }));
-  return new Response(body, { headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+// Schlägt eine passende Tagline für die aktuelle Tageszeit nach.
+// Der Client schickt seine lokale Stunde als ?h= mit, damit die Zeitzone stimmt.
+function handleTagline(request) {
+  const raw = parseInt(new URL(request.url).searchParams.get("h") ?? "");
+  const hour = Number.isInteger(raw) && raw >= 0 && raw < 24 ? raw : new Date().getUTCHours();
+  const pool = TAGLINES[getSlot(hour)];
+  const tagline = pool[Math.floor(Math.random() * pool.length)];
+  return new Response(JSON.stringify({ tagline }), {
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
 }
 
 export default {
@@ -336,7 +346,7 @@ export default {
       if (request.method !== "GET") {
         return new Response("Method Not Allowed", { status: 405, headers: CORS_HEADERS });
       }
-      return handleTagline(env);
+      return handleTagline(request);
     }
 
     if (request.method === "GET") {
