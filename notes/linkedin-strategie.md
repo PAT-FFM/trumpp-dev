@@ -25,10 +25,10 @@ Insolvenz, sechs Rettungen in größere Organisationen — in der Regel nach
 vorherigem Schönen der Zahlen.
 
 **Serien-Mechanik:** Pro Post ein Mechanismus. Ton: Forensik, nicht
-Empörung. Da die Serie ohne „nette" Zwischenposts auskommt, übernimmt die
-echte Neugier die Anti-Zynismus-Funktion: Jeder Post endet mit einer
-offenen Frage oder einem Punkt, an dem der Autor selbst noch keine Antwort
-hat — nie mit einem Urteil.
+Empörung. Die echte Neugier übernimmt die Anti-Zynismus-Funktion — aber
+als eigene offene Stelle im Text formuliert („weiß ich nicht", „habe ich
+noch nicht gefunden"), nie als Frage ans Publikum. Posts enden leise, ohne
+Kommentar-Aufforderung: Wer kommentieren will, kommentiert auch so.
 
 ## Leitplanken
 
@@ -62,7 +62,7 @@ hat — nie mit einem Urteil.
 4. **Der Exit als Plan B** — vertieft den Opener; funktioniert erst, wenn
    die Sieben-Firmen-Geschichte bekannt ist.
 5. **Wer sollte es auch aufdecken** — der analytisch dichteste Post,
-   schließt den Bogen der ersten Staffel mit offener Frage an die Leser.
+   schließt den Bogen der ersten Staffel.
 
 ---
 
@@ -89,9 +89,6 @@ ist die Wahrheit verschiebbar. Die Insolvenz ist der einzige Moment, in
 dem das System sie aussprechen muss — deshalb habe ich sie nur einmal
 erlebt.
 
-Mich würde eure Stichprobe interessieren. Nicht die offizielle Version —
-die kenne ich aus den Pressemitteilungen.
-
 ### 2. Fertig ist, wenn das Geld ausgegangen ist
 
 „Wann ist ein Projekt fertig?"
@@ -113,8 +110,7 @@ Branche, das sich nicht wegdiskutieren lässt — Qualität, Scope und
 „fertig" sind verhandelbar, der Kontostand nicht.
 
 Ich kenne nach dreißig Jahren genau null Projekte, die fertig wurden,
-obwohl noch Budget da war. Falls jemand eines hat: ehrliches Interesse.
-Ich sammle Gegenbeispiele.
+obwohl noch Budget da war.
 
 ### 3. Das Tagessatz-Paradox
 
@@ -135,10 +131,10 @@ einzelner Vertriebler — das ist das rationale Gleichgewicht der ganzen
 Branche.
 
 Bis es jemand bricht. Spannend wird es, wenn der erste Anbieter Ergebnisse
-statt Zeit bepreist. Meine offene Frage dazu: Überlebt Outcome-Pricing den
-ersten Kontakt mit dem Enterprise-Einkauf? Der ist nämlich seit dreißig
-Jahren auf Personentage geeicht — und Beschaffungsprozesse sterben noch
-langsamer als Geschäftsmodelle.
+statt Zeit bepreist. Ob Outcome-Pricing den ersten Kontakt mit dem
+Enterprise-Einkauf überlebt, weiß ich nicht. Der ist seit dreißig Jahren
+auf Personentage geeicht — und Beschaffungsprozesse sterben noch langsamer
+als Geschäftsmodelle.
 
 ### 4. Der Exit als Plan B
 
@@ -182,8 +178,8 @@ nach zwei Umbenennungen schlicht keinen Adressaten mehr.
 
 Ich schreibe das ohne Häme. Mich interessiert die Konstruktion: ein
 System, in dem alle Beteiligten rational handeln und das Ergebnis trotzdem
-kollektive Fiktion ist. Wer Lösungen kennt, die nicht „mehr Compliance"
-heißen — ich höre.
+kollektive Fiktion ist. Eine Lösung, die nicht „mehr Compliance" heißt,
+habe ich bisher nicht gefunden.
 
 ---
 
