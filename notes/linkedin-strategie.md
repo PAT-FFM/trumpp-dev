@@ -1,8 +1,8 @@
 # LinkedIn-Strategie — Arbeitsnotizen
 
-> Interne Notizen, nicht zum Deployen gedacht. Falls dieser Branch je in den
-> Deploy-Branch gemerged wird: `notes/` vorher entfernen oder in `netlify.toml`
-> per Redirect verstecken, sonst ist die Datei öffentlich erreichbar.
+> Interne Notizen. `/notes/*` wird in `netlify.toml` per Force-404 versteckt
+> (analog zu `/workers/*`) und ist daher nach dem Deploy nicht öffentlich
+> abrufbar.
 
 ## Ziel
 
