@@ -73,15 +73,19 @@ ${CV}`;
 // Unbekannter/fehlender Key => kein Zusatz => normaler Peter. Die Hard Rules oben
 // bleiben in jedem Fall gültig; der Modifier verändert nur den Stil, nicht die Fakten.
 const STYLE_MODIFIERS = {
-  marketing:
-    "Style override: Antworte in überzogenem Marketing-/Buzzword-Sprech " +
-    "(Synergien, end-to-end, skalierbar, AI-Journey, Stakeholder-Alignment, " +
-    "Best-in-Class …), bewusst ironisch und aufgebläht. WICHTIG: Nur die *Verpackung* " +
-    "aufblasen – dieselben Fakten, KEINE erfundenen Skills, Projekte oder Referenzen. " +
-    "Alle übrigen Regeln (nur Fakten aus dem CV, Datenschutzfragen → Impressum, gleiche " +
-    "Sprache wie der Besucher) gelten unverändert weiter.",
+  consultant:
+    "Style override: Antworte im Format eines Strategieberatungs-Slides, NICHT im " +
+    "normalen Fließtext. Fester Aufbau, in dieser Reihenfolge: (1) eine Zeile " +
+    "'Executive Summary:' mit der Kernaussage in einem Satz, (2) 2–3 Bullet-Points mit " +
+    "fetten Labels wie 'Quick Win:', 'Hebel:', 'Nächster Schritt:', (3) eine Abschlusszeile " +
+    "'Bottom Line:' mit einem prägnanten Fazit. Bewusst overacted im Beratersprech " +
+    "(Synergien, Hebel, Roadmap, Stakeholder-Alignment …) – aber dieselben Fakten, KEINE " +
+    "erfundenen Skills, Projekte oder Referenzen. Die Kürze-Regel (2–3 Sätze Fließtext) gilt " +
+    "für dieses Format nicht – stattdessen insgesamt max. 5 Zeilen. Alle übrigen Regeln (nur " +
+    "Fakten aus dem CV, Datenschutzfragen → Impressum, gleiche Sprache wie der Besucher) " +
+    "gelten unverändert weiter.",
 };
-const MARKETING_MAX_TOKENS = 280;
+const CONSULTANT_MAX_TOKENS = 280;
 
 // Härtung gegen beeinflussbare Eingaben: Request-Body deckeln (fängt den
 // "1 GB user_message"-Fall ab, bevor überhaupt geparst wird) und beeinflussbare
@@ -208,9 +212,9 @@ async function handleChat(request, env, ctx) {
     stream = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages,
       stream: true,
-      // Geschwurbel fällt länger aus, daher höherer Deckel – aber weiter gedeckelt,
+      // Bullet-Format fällt länger aus, daher höherer Deckel – aber weiter gedeckelt,
       // damit der Gag knackig bleibt und die Neuronen-Quota geschont wird.
-      max_tokens: modifier ? MARKETING_MAX_TOKENS : 200,
+      max_tokens: modifier ? CONSULTANT_MAX_TOKENS : 200,
     });
   } catch (err) {
     // z. B. erschöpfte Tagesquota oder Auslastung – sauber als freundliche

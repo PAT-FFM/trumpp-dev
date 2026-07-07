@@ -226,6 +226,7 @@ footer a{
   font-size: 0.78rem;
   line-height: 1.5;
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .chat-msg.user {
@@ -249,7 +250,7 @@ footer a{
   flex-wrap: wrap;
 }
 
-#chat-marketing {
+#chat-consultant {
   background: #fff;
   color: #555;
   border: 1px solid #ddd;
@@ -262,9 +263,9 @@ footer a{
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-#chat-marketing:hover { border-color: #1a1a1a; }
+#chat-consultant:hover { border-color: #1a1a1a; }
 
-#chat-marketing[aria-pressed="true"] {
+#chat-consultant[aria-pressed="true"] {
   background: #1a1a1a;
   color: #fff;
   border-color: #1a1a1a;

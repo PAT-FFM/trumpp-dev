@@ -119,7 +119,7 @@
       </div>
       <div id="chat-messages"></div>
       <div id="chat-tools">
-        <button id="chat-marketing" type="button" aria-pressed="false" title="Lässt Peter im Marketing-Sprech antworten – ironisch gemeint.">Marketing-Sprech 🚀</button>
+        <button id="chat-consultant" type="button" aria-pressed="false" title="Lässt Peter im Strategieberater-Sprech antworten – ironisch gemeint.">Berater-Modus 📊</button>
       </div>
       <div id="chat-input-area">
         <textarea id="chat-input" placeholder="Deine Frage…" autocomplete="off" maxlength="512" rows="2"></textarea>
@@ -158,7 +158,7 @@
       const input     = document.getElementById("chat-input");
       const sendBtn   = document.getElementById("chat-send");
       const micBtn    = document.getElementById("chat-mic");
-      const marketing = document.getElementById("chat-marketing");
+      const consultant = document.getElementById("chat-consultant");
 
       // Voice input — versteckt sich selbst wenn SpeechRecognition nicht verfügbar
       if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
@@ -180,9 +180,9 @@
         rec.onerror  = () => { listening = false; micBtn.classList.remove('recording'); };
       }
 
-      marketing.addEventListener("click", () => {
-        mode = mode === "marketing" ? null : "marketing";
-        marketing.setAttribute("aria-pressed", mode === "marketing" ? "true" : "false");
+      consultant.addEventListener("click", () => {
+        mode = mode === "consultant" ? null : "consultant";
+        consultant.setAttribute("aria-pressed", mode === "consultant" ? "true" : "false");
       });
 
       let autoOpenTimer = null;
