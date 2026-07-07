@@ -109,7 +109,7 @@ async function maybeNotifyByEmail(env, d) {
   if (await cache.match(throttleKey)) return;
   await cache.put(throttleKey, new Response("1", { headers: { "Cache-Control": "max-age=600" } }));
   try {
-    await fetch("https://api.resend.com/emails", {
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
@@ -126,6 +126,9 @@ async function maybeNotifyByEmail(env, d) {
           `Session: ${d.sessionId || "?"}\nZeit: ${new Date().toISOString()}`,
       }),
     });
+    // fetch() wirft bei 4xx/5xx keine Exception – ohne diesen Check bleiben
+    // Resend-Fehlerantworten (z.B. Rate-Limit, ungültiger Key) unsichtbar.
+    if (!res.ok) console.log("NOTIFY_ERROR", res.status, await res.text());
   } catch (err) {
     console.log("NOTIFY_ERROR", String(err));
   }
