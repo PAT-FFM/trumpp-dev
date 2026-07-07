@@ -185,12 +185,32 @@
         marketing.setAttribute("aria-pressed", mode === "marketing" ? "true" : "false");
       });
 
+      let autoOpenTimer = null;
+      function cancelAutoOpen() {
+        if (autoOpenTimer) { clearTimeout(autoOpenTimer); autoOpenTimer = null; }
+      }
+      function openChat(focusInput = true) {
+        chatWin.removeAttribute("hidden");
+        if (focusInput) input.focus();
+      }
+      function closeChat() { chatWin.setAttribute("hidden", ""); }
+
       toggle.addEventListener("click", () => {
-        const hidden = chatWin.hasAttribute("hidden");
-        if (hidden) { chatWin.removeAttribute("hidden"); input.focus(); }
-        else chatWin.setAttribute("hidden", "");
+        cancelAutoOpen();
+        if (chatWin.hasAttribute("hidden")) openChat();
+        else closeChat();
       });
-      closeBtn.addEventListener("click", () => chatWin.setAttribute("hidden", ""));
+      closeBtn.addEventListener("click", () => { cancelAutoOpen(); closeChat(); });
+
+      // Chat nach 6 s automatisch öffnen – einmal pro Session, sofern der
+      // Nutzer das Fenster nicht vorher selbst geöffnet/geschlossen hat.
+      if (!sessionStorage.getItem("chat_auto_opened")) {
+        autoOpenTimer = setTimeout(() => {
+          autoOpenTimer = null;
+          sessionStorage.setItem("chat_auto_opened", "1");
+          if (chatWin.hasAttribute("hidden")) openChat(false);
+        }, 6000);
+      }
       sendBtn.addEventListener("click", submit);
       input.addEventListener("keydown", e => {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }

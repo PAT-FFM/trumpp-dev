@@ -169,9 +169,20 @@ footer a{
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transform-origin: bottom right;
+  animation: chat-open 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 #chat-window[hidden] { display: none; }
+
+@keyframes chat-open {
+  from { opacity: 0; transform: translateY(12px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #chat-window { animation: none; }
+}
 
 #chat-header {
   padding: 0.875rem 1rem;
