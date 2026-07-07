@@ -20,9 +20,12 @@ System die Wahrheit aussprechen muss. Auf Projektebene: Projekte enden
 nicht an Fertigkeit, sondern an Budgetgrenzen — „fertig" ist, wenn das
 Geld ausgegangen ist.
 
-**Eigenes Material:** sieben Arbeitgeber in dreißig Jahren, eine
-Insolvenz, sechs Rettungen in größere Organisationen — in der Regel nach
-vorherigem Schönen der Zahlen.
+**Eigenes Material:** sieben Arbeitgeber in dreißig Jahren, zwei
+Insolvenzen (eine von innen erlebt, die zweite erst zwei Jahre nach dem
+eigenen Abgang), die übrigen Rettungen in größere Organisationen — zum
+Teil in mehreren Stufen (entory → Deutsche Börse Group → Softlab →
+NTT Data; Namen bleiben intern, im Post nur „in mehreren Stufen"). In
+der Regel nach vorherigem Schönen der Zahlen.
 
 **Serien-Mechanik:** Pro Post ein Mechanismus. Ton: Forensik, nicht
 Empörung. Die echte Neugier übernimmt die Anti-Zynismus-Funktion — aber
@@ -70,10 +73,12 @@ Kommentar-Aufforderung: Wer kommentieren will, kommentiert auch so.
 
 ### 1. Sieben Firmen
 
-Ich habe in dreißig Jahren bei sieben Firmen gearbeitet. Eine ist
-insolvent gegangen. Die anderen sechs haben sich in größere Organisationen
-gerettet — in der Regel, nachdem vorher an den Zahlen geschönt wurde, was
-zu schönen war.
+Ich habe in dreißig Jahren bei sieben Firmen gearbeitet. Zwei davon sind
+insolvent gegangen — eine, während ich dort war; die zweite hielt noch
+zwei Jahre durch, nachdem ich weg war. Die übrigen haben sich in größere
+Organisationen gerettet, zum Teil in mehreren Stufen: weiterverkauft,
+und der Käufer später selbst übernommen. In der Regel war vorher an den
+Zahlen geschönt worden, was zu schönen war.
 
 Lange dachte ich, ich hätte ein besonderes Händchen für solche
 Arbeitgeber. Inzwischen glaube ich: Das ist der Normalfall. Man sieht ihn
@@ -86,8 +91,8 @@ Arbeitshypothese: Firmen sterben nicht an Unwahrheit, sie sterben an
 Illiquidität. Ziele sind kein Vertrag, sondern ein
 Finanzierungsinstrument. Solange jemand die nächste Periode finanziert,
 ist die Wahrheit verschiebbar. Die Insolvenz ist der einzige Moment, in
-dem das System sie aussprechen muss — deshalb habe ich sie nur einmal
-erlebt.
+dem das System sie aussprechen muss — deshalb habe ich sie in dreißig
+Jahren nur zweimal gesehen, und nur einmal von innen.
 
 ### 2. Fertig ist, wenn das Geld ausgegangen ist
 
