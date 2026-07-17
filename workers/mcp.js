@@ -72,25 +72,6 @@ Contact: info@trumpp.dev | LinkedIn: https://www.linkedin.com/in/peter-trumpp-84
 Peter's profile and CV:
 ${CV}`;
 
-// Whitelist optionaler Tonfall-Modi. Der Client schickt nur einen Key (body.mode),
-// niemals freien Prompt-Text – das verhindert Prompt-Injection über den Worker.
-// Unbekannter/fehlender Key => kein Zusatz => normaler Peter. Die Hard Rules oben
-// bleiben in jedem Fall gültig; der Modifier verändert nur den Stil, nicht die Fakten.
-const STYLE_MODIFIERS = {
-  consultant:
-    "Style override: Antworte im Format eines Strategieberatungs-Slides, NICHT im " +
-    "normalen Fließtext. Fester Aufbau, in dieser Reihenfolge: (1) eine Zeile " +
-    "'Executive Summary:' mit der Kernaussage in einem Satz, (2) 2–3 Bullet-Points mit " +
-    "fetten Labels wie 'Quick Win:', 'Hebel:', 'Nächster Schritt:', (3) eine Abschlusszeile " +
-    "'Bottom Line:' mit einem prägnanten Fazit. Bewusst overacted im Beratersprech " +
-    "(Synergien, Hebel, Roadmap, Stakeholder-Alignment …) – aber dieselben Fakten, KEINE " +
-    "erfundenen Skills, Projekte oder Referenzen. Die Kürze-Regel (2–3 Sätze Fließtext) gilt " +
-    "für dieses Format nicht – stattdessen insgesamt max. 5 Zeilen. Alle übrigen Regeln (nur " +
-    "Fakten aus dem CV, Datenschutzfragen → Impressum, gleiche Sprache wie der Besucher) " +
-    "gelten unverändert weiter.",
-};
-const CONSULTANT_MAX_TOKENS = 280;
-
 // Härtung gegen beeinflussbare Eingaben: Request-Body deckeln (fängt den
 // "1 GB user_message"-Fall ab, bevor überhaupt geparst wird) und beeinflussbare
 // Felder (user_message, user_agent) auf 512 Zeichen kappen – für DB und Mail.
@@ -203,9 +184,8 @@ async function handleChat(request, env, ctx) {
   const userAgent = truncate(request.headers.get("User-Agent") || "");
   const userTurns = safeMessages.filter(m => m.role === "user").length; // == 1 → erster Turn
 
-  const modifier = STYLE_MODIFIERS[body.mode] || "";
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT + (modifier ? "\n\n" + modifier : "") },
+    { role: "system", content: SYSTEM_PROMPT },
     ...safeMessages,
   ];
 
@@ -219,9 +199,7 @@ async function handleChat(request, env, ctx) {
     stream = await env.AI.run("@cf/meta/llama-3.3-70b-instruct-fp8-fast", {
       messages,
       stream: true,
-      // Bullet-Format fällt länger aus, daher höherer Deckel – aber weiter gedeckelt,
-      // damit der Gag knackig bleibt und die Neuronen-Quota geschont wird.
-      max_tokens: modifier ? CONSULTANT_MAX_TOKENS : 200,
+      max_tokens: 200,
     });
   } catch (err) {
     // z. B. erschöpfte Tagesquota oder Auslastung – sauber als freundliche

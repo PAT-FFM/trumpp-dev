@@ -67,7 +67,6 @@ The worker is named `trumpp-dev-mcp` and runs at `trumpp-dev-mcp.trumpp-dev.work
 - 52px circular button, bottom-right corner
 - Connects to `https://trumpp-dev-mcp.trumpp-dev.workers.dev/chat` via SSE streaming
 - Session persistence via `sessionStorage` (`chat_session_id`)
-- "Marketing mode" toggle (🚀 button) — switches AI to ironic buzzword-heavy style
 - Keyboard shortcut: Enter to send
 
 ## Key Conventions
@@ -94,7 +93,6 @@ The worker is named `trumpp-dev-mcp` and runs at `trumpp-dev-mcp.trumpp-dev.work
 - User messages are truncated to 512 chars server-side
 - Body reads are capped at declared `Content-Length` (max 64 KB)
 - Stats page uses `textContent` (not `innerHTML`) everywhere to prevent XSS
-- Style-mode selector is an enum lookup, never passed as free text to the AI prompt
 
 ### GDPR / Legal
 - No IP addresses are stored anywhere

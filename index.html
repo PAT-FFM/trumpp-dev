@@ -118,9 +118,6 @@
         <button id="chat-close" aria-label="Chat schließen">✕</button>
       </div>
       <div id="chat-messages"></div>
-      <div id="chat-tools">
-        <button id="chat-consultant" type="button" aria-pressed="false" title="Lässt Peter im Strategieberater-Sprech antworten – ironisch gemeint.">Berater-Modus 📊</button>
-      </div>
       <div id="chat-input-area">
         <textarea id="chat-input" placeholder="Deine Frage…" autocomplete="off" maxlength="512" rows="2"></textarea>
         <button id="chat-mic" type="button" aria-label="Spracheingabe">
@@ -149,7 +146,6 @@
       })();
       let history = [];
       let isLoading = false;
-      let mode = null;
 
       const toggle    = document.getElementById("chat-toggle");
       const chatWin   = document.getElementById("chat-window");
@@ -158,7 +154,6 @@
       const input     = document.getElementById("chat-input");
       const sendBtn   = document.getElementById("chat-send");
       const micBtn    = document.getElementById("chat-mic");
-      const consultant = document.getElementById("chat-consultant");
 
       // Voice input — versteckt sich selbst wenn SpeechRecognition nicht verfügbar
       if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
@@ -179,11 +174,6 @@
         rec.onresult = e => { input.value = e.results[0][0].transcript; input.focus(); };
         rec.onerror  = () => { listening = false; micBtn.classList.remove('recording'); };
       }
-
-      consultant.addEventListener("click", () => {
-        mode = mode === "consultant" ? null : "consultant";
-        consultant.setAttribute("aria-pressed", mode === "consultant" ? "true" : "false");
-      });
 
       let autoOpenTimer = null;
       function cancelAutoOpen() {
@@ -242,7 +232,7 @@
           const res = await fetch(CHAT_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messages: history, sessionId, mode }),
+            body: JSON.stringify({ messages: history, sessionId }),
           });
           const reader = res.body.getReader();
           const decoder = new TextDecoder();
