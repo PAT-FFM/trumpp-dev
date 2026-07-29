@@ -37,6 +37,11 @@
       border-top-right-radius: 12px;
       box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.15);
       padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom));
+      transition: transform 0.3s ease;
+    }
+
+    .panel.collapsed {
+      transform: translateX(-110%);
     }
 
     @media (min-width: 640px) {
@@ -50,6 +55,27 @@
         border-radius: 12px;
         padding: 1rem 1.25rem;
       }
+    }
+
+    .panel-handle {
+      display: none;
+      position: fixed;
+      left: 1rem;
+      bottom: 1rem;
+      z-index: 1001;
+      background: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #1976d2;
+      cursor: pointer;
+    }
+
+    .panel-handle.visible {
+      display: inline-block;
     }
 
     label {
@@ -180,6 +206,8 @@
     <div id="status"></div>
   </div>
 
+  <button id="panelHandle" class="panel-handle" type="button">Bedienfeld anzeigen</button>
+
   <script>
     const map = L.map("map", { zoomControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -205,11 +233,25 @@
     const focusRow = document.getElementById("focusRow");
     const focusSelect = document.getElementById("focusSelect");
     const allBtn = document.getElementById("allBtn");
+    const panelEl = document.querySelector(".panel");
+    const panelHandle = document.getElementById("panelHandle");
 
     function showStatus(message, isError) {
       statusEl.textContent = message;
       statusEl.className = isError ? "error" : "ok";
     }
+
+    function collapsePanel() {
+      panelEl.classList.add("collapsed");
+      panelHandle.classList.add("visible");
+    }
+
+    function expandPanel() {
+      panelEl.classList.remove("collapsed");
+      panelHandle.classList.remove("visible");
+    }
+
+    panelHandle.addEventListener("click", expandPanel);
 
     function formatRelativeTime(isoString) {
       const diffMs = Date.now() - new Date(isoString).getTime();
@@ -302,6 +344,7 @@
       const layers = Object.values(dbMarkers);
       if (myMarker) layers.push(myMarker);
       if (layers.length > 0) {
+        collapsePanel();
         map.fitBounds(L.featureGroup(layers).getBounds().pad(0.2));
       }
     });
