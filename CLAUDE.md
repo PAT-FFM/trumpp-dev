@@ -240,6 +240,20 @@ separate document).
   - `GET /location/all` → all entries from the last 24h (pseudonym, lat,
     lng, timestamp) — feeds both map pins and the dropdown
   - `POST /location/set` → upsert own position under a pseudonym
+- **Abuse hardening on `POST /location/set`** (basic speed bumps, not real
+  security — see "Explicitly out of scope"):
+  - Origin allowlist (`trumpp.dev`, `www.trumpp.dev`), same list as
+    `workers/mcp.js`. Rejects with **401**, not 403 — `netlify dev`'s local
+    static-file fallback treats a 403 from an edge function as "maybe this
+    is a directory" and retries the request against `/index.html` variants,
+    clobbering the response; 401 doesn't trigger that. Trivially bypassed by
+    a script that just sets the header itself, same caveat as the chat
+    endpoint's origin check.
+  - Best-effort per-IP rate limit (10 requests/60s), state held in an
+    in-memory `Map` at module scope — only holds within a single warm
+    edge isolate, resets on cold start, not shared across edge locations.
+    No Cloudflare-style rate-limiter binding available on Netlify Edge
+    Functions, so this is the pragmatic substitute.
 
 ### Data model
 
@@ -252,6 +266,14 @@ Table `locations`:
 Only the latest entry is kept per pseudonym (upsert), no history.
 RLS "deny all" for direct client access — access only via the edge function
 with the service role key.
+
+A DB trigger (`trg_limit_locations`, function `limit_locations_table()`)
+caps the table at 500 rows: on every genuine new insert (not on updates to
+an existing pseudonym — those don't fire an `AFTER INSERT` row trigger), it
+deletes rows outside the 500 most recently updated pseudonyms. Guards
+against a spam script flooding the table with many distinct fake
+pseudonyms; set up manually via the Supabase SQL editor, not part of this
+repo (no migrations tooling here).
 
 ### Explicitly out of scope (v1)
 
