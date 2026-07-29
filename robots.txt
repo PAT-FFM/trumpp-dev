@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /stats
+Disallow: /location
 
 Sitemap: https://trumpp.dev/sitemap.xml
