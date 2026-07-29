@@ -204,11 +204,18 @@ separate document).
 - **One combined page** at `/location` (unlinked, `noindex`, also excluded
   in `robots.txt` like `/stats`):
   - Map with two pin types: **"You"** (own position, draggable, not
-    persisted until posted) and **DB pins** — one pin per stored row, not
-    per pseudonym, from the last 24h from Supabase, so a pseudonym with
-    several posts shows as a short trail of pins. Tap/click on a pin opens a
-    popup with pseudonym + timestamp (`HH:MM:SS`, deliberately `bindPopup()`
-    instead of a hover tooltip, since hover doesn't exist on touch devices).
+    persisted until posted, always blue) and **DB pins** — one pin per
+    stored row, not per pseudonym, from the last 24h from Supabase, so a
+    pseudonym with several posts shows as a short trail of pins. DB pins are
+    colored per pseudonym from a 5-color rotating palette, assigned by
+    order of first appearance among the currently loaded entries (the 6th
+    distinct active pseudonym reuses the 1st's color) — so a person's trail
+    is visually consistent and distinguishable from others. Recomputed on
+    every load, so the color can drift slowly as older entries age out of
+    the 24h window; acceptable for a handful of family/friends users. Tap/
+    click on a pin opens a popup with pseudonym + timestamp (`HH:MM:SS`,
+    deliberately `bindPopup()` instead of a hover tooltip, since hover
+    doesn't exist on touch devices).
   - Initial map centering: own live position (via `getCurrentPosition()`) at
     street-level zoom. The geolocation permission prompt fires immediately
     on load — that's the whole point of the page; a use case of "view

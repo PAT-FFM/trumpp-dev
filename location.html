@@ -150,9 +150,7 @@
       width: 18px;
       height: 18px;
       border-radius: 50%;
-      background: #fb8c00;
       border: 3px solid white;
-      box-shadow: 0 0 0 2px #fb8c00;
     }
 
     .focus-row {
@@ -236,12 +234,43 @@
       iconAnchor: [10, 10]
     });
 
-    const dbIcon = L.divIcon({
-      className: "db-marker-icon",
-      html: '<div class="db-marker-dot"></div>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
-    });
+    const DB_MARKER_COLORS = ["#fb8c00", "#8e24aa", "#2e7d32", "#e53935", "#6d4c41"];
+    const dbIconCache = {};
+
+    // Colors are assigned by order of first appearance (oldest timestamp
+    // per pseudonym among the currently loaded entries), rotating through
+    // DB_MARKER_COLORS — so the 6th distinct active pseudonym reuses the
+    // 1st's color. Recomputed on every load, so as older entries age out of
+    // the 24h window, "first appearance" (and therefore the color) can
+    // shift — acceptable trade-off for a handful of family/friends users.
+    function assignColorsByFirstSeen(entries) {
+      const firstSeen = {};
+      entries.forEach((e) => {
+        if (!firstSeen[e.pseudonym] || e.timestamp < firstSeen[e.pseudonym]) {
+          firstSeen[e.pseudonym] = e.timestamp;
+        }
+      });
+      const orderedPseudonyms = Object.keys(firstSeen).sort((a, b) =>
+        firstSeen[a].localeCompare(firstSeen[b])
+      );
+      const colorMap = {};
+      orderedPseudonyms.forEach((p, i) => {
+        colorMap[p] = DB_MARKER_COLORS[i % DB_MARKER_COLORS.length];
+      });
+      return colorMap;
+    }
+
+    function getDbIcon(color) {
+      if (!dbIconCache[color]) {
+        dbIconCache[color] = L.divIcon({
+          className: "db-marker-icon",
+          html: `<div class="db-marker-dot" style="background:${color};box-shadow:0 0 0 2px ${color};"></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+      }
+      return dbIconCache[color];
+    }
 
     const statusEl = document.getElementById("status");
     const postBtn = document.getElementById("postBtn");
@@ -311,8 +340,10 @@
       allDbMarkers.forEach((m) => map.removeLayer(m));
       allDbMarkers = [];
       latestMarkerByPseudonym = {};
+      const colorMap = assignColorsByFirstSeen(entries);
       entries.forEach((entry) => {
-        const marker = L.marker([entry.lat, entry.lng], { icon: dbIcon }).addTo(map);
+        const icon = getDbIcon(colorMap[entry.pseudonym]);
+        const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
         marker.bindPopup(
           `<strong>${escapeHtml(entry.pseudonym)}</strong><br>${formatTime(entry.timestamp)}`
         );
