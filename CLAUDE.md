@@ -214,12 +214,13 @@ separate document).
     positions without sharing your own" is not supported.
   - The "You" pin is **draggable** — lets the user correct a slightly-off
     GPS fix or deliberately mark a nearby place before arriving there.
-  - Required pseudonym field + "Post my position" button: posts whichever
+  - Required pseudonym field + "Post position" button: posts whichever
     coordinates the "You" pin currently shows (GPS or manually dragged), not
     a fresh GPS fetch — dragging would otherwise be overwritten on every
-    click. A separate "Refresh location" link re-fetches a fresh GPS
-    position and resets the pin there. Helper text directly under the
-    pseudonym field explains the link between pin and pseudonym.
+    click. Button label deliberately doesn't say "my position", since after
+    dragging it may not be. A separate "Refresh location" link re-fetches a
+    fresh GPS position and resets the pin there. Helper text directly under
+    the pseudonym field explains the link between pin and pseudonym.
   - Focus row (only shown if DB entries from the last 24h exist): dropdown
     with existing pseudonyms (on change: map pans/zooms to that pin, other
     pins stay visible) + separate "Show all pins" button (fitBounds over all
