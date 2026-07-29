@@ -226,7 +226,8 @@
     map.setView([51.1657, 10.4515], 6);
 
     let myMarker = null;
-    let dbMarkers = {};
+    let allDbMarkers = [];
+    let latestMarkerByPseudonym = {};
 
     const myIcon = L.divIcon({
       className: "my-marker-icon",
@@ -269,13 +270,12 @@
 
     panelHandle.addEventListener("click", expandPanel);
 
-    function formatRelativeTime(isoString) {
-      const diffMs = Date.now() - new Date(isoString).getTime();
-      const minutes = Math.round(diffMs / 60000);
-      if (minutes < 1) return "gerade eben";
-      if (minutes < 60) return `vor ${minutes} Min.`;
-      const hours = Math.round(minutes / 60);
-      return `vor ${hours} Std.`;
+    function formatTime(isoString) {
+      return new Date(isoString).toLocaleTimeString("de-DE", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      });
     }
 
     function getFreshPosition() {
@@ -304,27 +304,46 @@
     }
 
     function renderDbMarkers(entries) {
-      Object.values(dbMarkers).forEach((m) => map.removeLayer(m));
-      dbMarkers = {};
+      // entries is ordered newest-first (timestamp.desc), can contain
+      // multiple rows per pseudonym (history, up to 50 each). Every row
+      // gets its own pin; latestMarkerByPseudonym additionally tracks just
+      // the newest marker per pseudonym, for the focus dropdown.
+      allDbMarkers.forEach((m) => map.removeLayer(m));
+      allDbMarkers = [];
+      latestMarkerByPseudonym = {};
       entries.forEach((entry) => {
         const marker = L.marker([entry.lat, entry.lng], { icon: dbIcon }).addTo(map);
         marker.bindPopup(
-          `<strong>${escapeHtml(entry.pseudonym)}</strong><br>${formatRelativeTime(entry.timestamp)}`
+          `<strong>${escapeHtml(entry.pseudonym)}</strong><br>${formatTime(entry.timestamp)}`
         );
-        dbMarkers[entry.pseudonym] = marker;
+        allDbMarkers.push(marker);
+        if (!latestMarkerByPseudonym[entry.pseudonym]) {
+          latestMarkerByPseudonym[entry.pseudonym] = marker;
+        }
       });
     }
 
     function renderFocusRow(entries) {
-      if (entries.length === 0) {
+      // Dedupe to one dropdown entry per pseudonym — first occurrence wins
+      // since entries is ordered newest-first.
+      const seen = new Set();
+      const uniquePseudonyms = [];
+      entries.forEach((e) => {
+        if (!seen.has(e.pseudonym)) {
+          seen.add(e.pseudonym);
+          uniquePseudonyms.push(e.pseudonym);
+        }
+      });
+
+      if (uniquePseudonyms.length === 0) {
         focusRow.hidden = true;
         return;
       }
       focusRow.hidden = false;
       focusSelect.innerHTML =
         '<option value="">— fokussieren —</option>' +
-        entries
-          .map((e) => `<option value="${escapeHtml(e.pseudonym)}">${escapeHtml(e.pseudonym)}</option>`)
+        uniquePseudonyms
+          .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
           .join("");
     }
 
@@ -349,15 +368,16 @@
     focusSelect.addEventListener("change", () => {
       const pseudonym = focusSelect.value;
       if (!pseudonym) return;
-      const marker = dbMarkers[pseudonym];
+      const marker = latestMarkerByPseudonym[pseudonym];
       if (marker) {
+        collapsePanel();
         map.setView(marker.getLatLng(), 15);
         marker.openPopup();
       }
     });
 
     allBtn.addEventListener("click", () => {
-      const layers = Object.values(dbMarkers);
+      const layers = allDbMarkers.slice();
       if (myMarker) layers.push(myMarker);
       if (layers.length > 0) {
         collapsePanel();

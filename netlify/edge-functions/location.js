@@ -99,13 +99,13 @@ export default async (req, context) => {
       });
     }
 
-    const res = await fetch(`${supabaseUrl}/rest/v1/locations?on_conflict=pseudonym`, {
+    const res = await fetch(`${supabaseUrl}/rest/v1/locations`, {
       method: "POST",
       headers: {
         "apikey": supabaseKey,
         "Authorization": `Bearer ${supabaseKey}`,
         "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates,return=minimal"
+        "Prefer": "return=minimal"
       },
       body: JSON.stringify({ pseudonym, lat, lng, timestamp: new Date().toISOString() })
     });

@@ -204,10 +204,11 @@ separate document).
 - **One combined page** at `/location` (unlinked, `noindex`, also excluded
   in `robots.txt` like `/stats`):
   - Map with two pin types: **"You"** (own position, draggable, not
-    persisted until posted) and **DB pins** (all pseudonym entries from the
-    last 24h from Supabase). Tap/click on a pin opens a popup with pseudonym
-    + timestamp (deliberately `bindPopup()` instead of a hover tooltip,
-    since hover doesn't exist on touch devices).
+    persisted until posted) and **DB pins** — one pin per stored row, not
+    per pseudonym, from the last 24h from Supabase, so a pseudonym with
+    several posts shows as a short trail of pins. Tap/click on a pin opens a
+    popup with pseudonym + timestamp (`HH:MM:SS`, deliberately `bindPopup()`
+    instead of a hover tooltip, since hover doesn't exist on touch devices).
   - Initial map centering: own live position (via `getCurrentPosition()`) at
     street-level zoom. The geolocation permission prompt fires immediately
     on load — that's the whole point of the page; a use case of "view
@@ -222,10 +223,17 @@ separate document).
     fresh GPS position and resets the pin there. Helper text directly under
     the pseudonym field explains the link between pin and pseudonym.
   - Focus row (only shown if DB entries from the last 24h exist): dropdown
-    with existing pseudonyms (on change: map pans/zooms to that pin, other
-    pins stay visible) + separate "Show all pins" button (fitBounds over all
-    pins). Deliberately no "all" dropdown entry, since that's an action, not
-    a selection.
+    with existing pseudonyms, deduplicated to one entry per pseudonym (on
+    change: map pans/zooms to that pseudonym's *newest* pin, other pins stay
+    visible; also collapses the panel, see below) + separate "Show all pins"
+    button (fitBounds over every pin, not just the latest per pseudonym).
+    Deliberately no "all" dropdown entry, since that's an action, not a
+    selection.
+  - The control panel is a bottom sheet (full-width on mobile, a small
+    floating card on desktop) that visually covers a chunk of the map. Both
+    "Show all pins" and focusing a pseudonym collapse it (animated slide to
+    the side) so `fitBounds`/panning isn't fighting for space with the
+    panel; a small handle button re-expands it.
 
 ### Stack
 
@@ -239,8 +247,10 @@ separate document).
   `netlify/edge-functions/location.js` proxies server-side (service role
   key, same pattern as `stats-auth.js`), two endpoints:
   - `GET /location/all` → all entries from the last 24h (pseudonym, lat,
-    lng, timestamp) — feeds both map pins and the dropdown
-  - `POST /location/set` → upsert own position under a pseudonym
+    lng, timestamp), newest first — feeds map pins directly; the dropdown
+    dedupes client-side to the newest entry per pseudonym
+  - `POST /location/set` → plain insert of a new position under a
+    pseudonym (not an upsert — see "Data model" for why)
 - **Abuse hardening on `POST /location/set`** (basic speed bumps, not real
   security — see "Explicitly out of scope"):
   - Origin allowlist (`trumpp.dev`, `www.trumpp.dev`), same list as
@@ -259,22 +269,37 @@ separate document).
 ### Data model
 
 Table `locations`:
-- `pseudonym` (text)
+- `id` (bigint, identity, primary key)
+- `pseudonym` (text, not unique — a pseudonym can have many rows)
 - `lat` (float)
 - `lng` (float)
 - `timestamp` (timestamptz)
 
-Only the latest entry is kept per pseudonym (upsert), no history.
+Every post is a plain **insert**, not an upsert — each pseudonym
+accumulates a short history (see caps below) instead of overwriting a
+single row. Deliberate: no cookie/session ties a browser to "its"
+pseudonym, so there's no reliable way to know which stored pseudonym (if
+any) is "you" — see the location tracker's "You" vs. DB-pin distinction
+above. Every row renders as its own pin; the dropdown dedupes to the
+newest per pseudonym for focusing.
+
 RLS "deny all" for direct client access — access only via the edge function
 with the service role key.
 
-A DB trigger (`trg_limit_locations`, function `limit_locations_table()`)
-caps the table at 500 rows: on every genuine new insert (not on updates to
-an existing pseudonym — those don't fire an `AFTER INSERT` row trigger), it
-deletes rows outside the 500 most recently updated pseudonyms. Guards
-against a spam script flooding the table with many distinct fake
-pseudonyms; set up manually via the Supabase SQL editor, not part of this
-repo (no migrations tooling here).
+Two DB triggers, both `after insert ... for each row` (so they only fire on
+genuine new rows, matching the plain-insert model above):
+- `trg_limit_locations` (function `limit_locations_table()`): caps the
+  **whole table at 500 rows total** — on insert, deletes rows beyond the
+  500 most recent (by `timestamp`, `id` as tiebreak), regardless of
+  pseudonym.
+- `trg_limit_locations_per_pseudonym` (function
+  `limit_locations_per_pseudonym()`): caps **each pseudonym at 50 rows** —
+  same eviction logic, scoped to `pseudonym = new.pseudonym`.
+
+Both guard against a spam script flooding the table, either with many
+distinct fake pseudonyms (global cap) or many rapid posts under one
+pseudonym (per-pseudonym cap). Set up manually via the Supabase SQL editor,
+not part of this repo (no migrations tooling here).
 
 ### Explicitly out of scope (v1)
 
