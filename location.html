@@ -234,12 +234,15 @@
       iconAnchor: [10, 10]
     });
 
-    const DB_MARKER_COLORS = ["#fb8c00", "#8e24aa", "#2e7d32", "#e53935", "#6d4c41"];
+    const DB_MARKER_COLORS = [
+      "#fb8c00", "#8e24aa", "#2e7d32", "#e53935", "#6d4c41",
+      "#00897b", "#d81b60", "#f9a825", "#757575", "#827717"
+    ];
     const dbIconCache = {};
 
     // Colors are assigned by order of first appearance (oldest timestamp
     // per pseudonym among the currently loaded entries), rotating through
-    // DB_MARKER_COLORS — so the 6th distinct active pseudonym reuses the
+    // DB_MARKER_COLORS — so the 11th distinct active pseudonym reuses the
     // 1st's color. Recomputed on every load, so as older entries age out of
     // the 24h window, "first appearance" (and therefore the color) can
     // shift — acceptable trade-off for a handful of family/friends users.
@@ -324,7 +327,7 @@
       if (myMarker) {
         myMarker.setLatLng([lat, lng]);
       } else {
-        myMarker = L.marker([lat, lng], { icon: myIcon, draggable: true }).addTo(map);
+        myMarker = L.marker([lat, lng], { icon: myIcon, draggable: true, zIndexOffset: 1000 }).addTo(map);
         myMarker.bindPopup("Du");
         myMarker.on("dragend", () => {
           showStatus("Position angepasst — wird beim nächsten Posten verwendet.", false);
@@ -395,6 +398,31 @@
         // silently skip — own position still works without DB pins
       }
     }
+
+    const POLL_INTERVAL_MS = 5000;
+    let pollTimer = null;
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(loadEntries, POLL_INTERVAL_MS);
+    }
+
+    function stopPolling() {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    // Pause polling while the tab is hidden — no point burning Supabase
+    // free-tier requests for a map nobody is looking at; catch up
+    // immediately on return instead of waiting for the next tick.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        loadEntries();
+        startPolling();
+      }
+    });
 
     focusSelect.addEventListener("change", () => {
       const pseudonym = focusSelect.value;
@@ -478,6 +506,7 @@
       } else {
         showStatus("Standortzugriff nicht möglich – bitte Berechtigung erteilen.", true);
       }
+      startPolling();
     }
 
     init();

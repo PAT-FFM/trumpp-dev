@@ -207,8 +207,8 @@ separate document).
     persisted until posted, always blue) and **DB pins** — one pin per
     stored row, not per pseudonym, from the last 24h from Supabase, so a
     pseudonym with several posts shows as a short trail of pins. DB pins are
-    colored per pseudonym from a 5-color rotating palette, assigned by
-    order of first appearance among the currently loaded entries (the 6th
+    colored per pseudonym from a 10-color rotating palette, assigned by
+    order of first appearance among the currently loaded entries (the 11th
     distinct active pseudonym reuses the 1st's color) — so a person's trail
     is visually consistent and distinguishable from others. Recomputed on
     every load, so the color can drift slowly as older entries age out of
