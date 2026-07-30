@@ -82,10 +82,13 @@ const truncate = (s, n = MAX_FIELD_LEN) => (typeof s === "string" ? s.slice(0, n
 
 // Benachrichtigt per E-Mail über Resend, wenn jemand im Chat etwas absendet.
 // Zwei bewusste Drosseln: (1) nur beim ersten Turn einer Session – über die
-// Nachrichtenanzahl erkannt, zustandsfrei; (2) global max. 1 Mail / 10 Min über
-// die Cache API (caches.default) – der Request dient dabei NUR als Cache-Schlüssel,
-// es wird kein HTTP-Request an die URL gesendet. Fail-safe gegen Massenmails:
-// die Drossel wird vor dem Versand gesetzt, lieber eine Mail verschlucken als fluten.
+// Nachrichtenanzahl erkannt, zustandsfrei; (2) max. 1 Mail / 10 Min über die
+// Cache API (caches.default) – der Request dient dabei NUR als Cache-Schlüssel,
+// es wird kein HTTP-Request an die URL gesendet. Cache API ist pro Rechenzentrum
+// gescoped, nicht global synchronisiert – bei Traffic aus mehreren Regionen im
+// selben Fenster ist theoretisch mehr als 1 Mail möglich, kein hartes Limit.
+// Fail-safe gegen Massenmails: die Drossel wird vor dem Versand gesetzt,
+// lieber eine Mail verschlucken als fluten.
 async function maybeNotifyByEmail(env, d) {
   if (!d.isFirstTurn) return;
   if (!env.RESEND_API_KEY) return;
