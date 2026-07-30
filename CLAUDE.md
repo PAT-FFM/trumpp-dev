@@ -181,11 +181,11 @@ The edge functions and worker expect these tables/RPCs:
 
 Minimalistic multi-user location tracker with no login/auth, for Peter's
 family & friends only — **not a general trumpp.dev website feature**. Users
-enter a self-chosen pseudonym; the current position is posted under it.
-Others see all pseudonym positions from the last 24h on a shared map.
+enter a self-chosen label; the current position is posted under it.
+Others see all label positions from the last 24h on a shared map.
 
 No claim to security or uniqueness: anyone who knows the URL can post under
-any pseudonym and read all positions. No password protection, no protection
+any label and read all positions. No password protection, no protection
 against overwriting.
 
 **Privacy:** No mention in the imprint (Impressum) needed — not a general
@@ -205,15 +205,15 @@ separate document).
   in `robots.txt` like `/stats`):
   - Map with two pin types: **"You"** (own position, draggable, not
     persisted until posted, always blue) and **DB pins** — one pin per
-    stored row, not per pseudonym, from the last 24h from Supabase, so a
-    pseudonym with several posts shows as a short trail of pins. DB pins are
-    colored per pseudonym from a 10-color rotating palette, assigned by
+    stored row, not per label, from the last 24h from Supabase, so a
+    label with several posts shows as a short trail of pins. DB pins are
+    colored per label from a 10-color rotating palette, assigned by
     order of first appearance among the currently loaded entries (the 11th
-    distinct active pseudonym reuses the 1st's color) — so a person's trail
+    distinct active label reuses the 1st's color) — so a person's trail
     is visually consistent and distinguishable from others. Recomputed on
     every load, so the color can drift slowly as older entries age out of
     the 24h window; acceptable for a handful of family/friends users. Tap/
-    click on a pin opens a popup with pseudonym + timestamp (`HH:MM:SS`,
+    click on a pin opens a popup with label + timestamp (`HH:MM:SS`,
     deliberately `bindPopup()` instead of a hover tooltip, since hover
     doesn't exist on touch devices).
   - Initial map centering: own live position (via `getCurrentPosition()`) at
@@ -222,23 +222,23 @@ separate document).
     positions without sharing your own" is not supported.
   - The "You" pin is **draggable** — lets the user correct a slightly-off
     GPS fix or deliberately mark a nearby place before arriving there.
-  - Required pseudonym field + "Post position" button: posts whichever
+  - Required label field + "Post position" button: posts whichever
     coordinates the "You" pin currently shows (GPS or manually dragged), not
     a fresh GPS fetch — dragging would otherwise be overwritten on every
     click. Button label deliberately doesn't say "my position", since after
     dragging it may not be. A separate "Refresh location" link re-fetches a
     fresh GPS position and resets the pin there. Helper text directly under
-    the pseudonym field explains the link between pin and pseudonym.
+    the label field explains the link between pin and label.
   - Focus row (only shown if DB entries from the last 24h exist): dropdown
-    with existing pseudonyms, deduplicated to one entry per pseudonym (on
-    change: map pans/zooms to that pseudonym's *newest* pin, other pins stay
+    with existing labels, deduplicated to one entry per label (on
+    change: map pans/zooms to that label's *newest* pin, other pins stay
     visible; also collapses the panel, see below) + separate "Show all pins"
-    button (fitBounds over every pin, not just the latest per pseudonym).
+    button (fitBounds over every pin, not just the latest per label).
     Deliberately no "all" dropdown entry, since that's an action, not a
     selection.
   - The control panel is a bottom sheet (full-width on mobile, a small
     floating card on desktop) that visually covers a chunk of the map. Both
-    "Show all pins" and focusing a pseudonym collapse it (animated slide to
+    "Show all pins" and focusing a label collapse it (animated slide to
     the side) so `fitBounds`/panning isn't fighting for space with the
     panel; a small handle button re-expands it.
 
@@ -253,11 +253,11 @@ separate document).
 - **API access:** no Supabase key in the browser. A new
   `netlify/edge-functions/location.js` proxies server-side (service role
   key, same pattern as `stats-auth.js`), two endpoints:
-  - `GET /location/all` → all entries from the last 24h (pseudonym, lat,
+  - `GET /location/all` → all entries from the last 24h (label, lat,
     lng, timestamp), newest first — feeds map pins directly; the dropdown
-    dedupes client-side to the newest entry per pseudonym
+    dedupes client-side to the newest entry per label
   - `POST /location/set` → plain insert of a new position under a
-    pseudonym (not an upsert — see "Data model" for why)
+    label (not an upsert — see "Data model" for why)
 - **Abuse hardening on `POST /location/set`** (basic speed bumps, not real
   security — see "Explicitly out of scope"):
   - Origin allowlist (`trumpp.dev`, `www.trumpp.dev`), same list as
@@ -277,18 +277,18 @@ separate document).
 
 Table `locations`:
 - `id` (bigint, identity, primary key)
-- `pseudonym` (text, not unique — a pseudonym can have many rows)
+- `label` (text, not unique — a label can have many rows)
 - `lat` (float)
 - `lng` (float)
 - `timestamp` (timestamptz)
 
-Every post is a plain **insert**, not an upsert — each pseudonym
+Every post is a plain **insert**, not an upsert — each label
 accumulates a short history (see caps below) instead of overwriting a
 single row. Deliberate: no cookie/session ties a browser to "its"
-pseudonym, so there's no reliable way to know which stored pseudonym (if
+label, so there's no reliable way to know which stored label (if
 any) is "you" — see the location tracker's "You" vs. DB-pin distinction
 above. Every row renders as its own pin; the dropdown dedupes to the
-newest per pseudonym for focusing.
+newest per label for focusing.
 
 RLS "deny all" for direct client access — access only via the edge function
 with the service role key.
@@ -298,20 +298,20 @@ genuine new rows, matching the plain-insert model above):
 - `trg_limit_locations` (function `limit_locations_table()`): caps the
   **whole table at 500 rows total** — on insert, deletes rows beyond the
   500 most recent (by `timestamp`, `id` as tiebreak), regardless of
-  pseudonym.
-- `trg_limit_locations_per_pseudonym` (function
-  `limit_locations_per_pseudonym()`): caps **each pseudonym at 50 rows** —
-  same eviction logic, scoped to `pseudonym = new.pseudonym`.
+  label.
+- `trg_limit_locations_per_label` (function
+  `limit_locations_per_label()`): caps **each label at 50 rows** —
+  same eviction logic, scoped to `label = new.label`.
 
 Both guard against a spam script flooding the table, either with many
-distinct fake pseudonyms (global cap) or many rapid posts under one
-pseudonym (per-pseudonym cap). Set up manually via the Supabase SQL editor,
+distinct fake labels (global cap) or many rapid posts under one
+label (per-label cap). Set up manually via the Supabase SQL editor,
 not part of this repo (no migrations tooling here).
 
 ### Explicitly out of scope (v1)
 
 - No password protection (unlinked URL + `noindex` is sufficient)
-- No authentication / no protection of pseudonyms
+- No authentication / no protection of labels
 - No background tracking while the screen is locked
 - No iOS consideration (Android-focused, no Mac/iPhone available for a
   Flutter iOS build — hence web instead of a native app anyway)

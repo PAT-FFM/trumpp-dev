@@ -30,7 +30,7 @@ export default async (req, context) => {
   if (url.pathname === "/location/all" && req.method === "GET") {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const res = await fetch(
-      `${supabaseUrl}/rest/v1/locations?select=pseudonym,lat,lng,timestamp&timestamp=gte.${since}&order=timestamp.desc`,
+      `${supabaseUrl}/rest/v1/locations?select=label,lat,lng,timestamp&timestamp=gte.${since}&order=timestamp.desc`,
       { headers: { "apikey": supabaseKey, "Authorization": `Bearer ${supabaseKey}` } }
     );
 
@@ -87,11 +87,11 @@ export default async (req, context) => {
       });
     }
 
-    const pseudonym = typeof body.pseudonym === "string" ? body.pseudonym.trim().slice(0, 64) : "";
+    const label = typeof body.label === "string" ? body.label.trim().slice(0, 64) : "";
     const lat = Number(body.lat);
     const lng = Number(body.lng);
 
-    if (!pseudonym || !Number.isFinite(lat) || !Number.isFinite(lng) ||
+    if (!label || !Number.isFinite(lat) || !Number.isFinite(lng) ||
         lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return new Response(JSON.stringify({ error: "Invalid input" }), {
         status: 400,
@@ -107,7 +107,7 @@ export default async (req, context) => {
         "Content-Type": "application/json",
         "Prefer": "return=minimal"
       },
-      body: JSON.stringify({ pseudonym, lat, lng, timestamp: new Date().toISOString() })
+      body: JSON.stringify({ label, lat, lng, timestamp: new Date().toISOString() })
     });
 
     if (!res.ok) {

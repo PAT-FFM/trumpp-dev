@@ -199,9 +199,9 @@
   <div id="map"></div>
 
   <div class="panel">
-    <label for="pseudonym">Pseudonym*</label>
-    <input type="text" id="pseudonym" placeholder="z.B. Tucan123" maxlength="64" autocomplete="off">
-    <p class="hint">Unter diesem Namen wird die Position des blauen Kreises gespeichert. Du kannst den Kreis auf der Karte verschieben.</p>
+    <label for="label">Label*</label>
+    <input type="text" id="label" placeholder="z.B. Tucan123" maxlength="64" autocomplete="off">
+    <p class="hint">Unter diesem Label wird die Position des blauen Kreises gespeichert. Du kannst den Kreis auf der Karte verschieben.</p>
     <button id="postBtn">Position posten</button>
     <button id="recenterBtn" type="button" class="link-btn">Standort neu ermitteln</button>
 
@@ -227,12 +227,12 @@
 
     let myMarker = null;
     let allDbMarkers = [];
-    let latestMarkerByPseudonym = {};
+    let latestMarkerByLabel = {};
 
     // Nearby DB pins collapse into a single neutral cluster icon (plain
     // black circle with a count) so a spot with several stacked pins isn't
     // mistaken for just one. Zooming in spreads them back out into their
-    // normal per-pseudonym colored markers — the color logic below never
+    // normal per-label colored markers — the color logic below never
     // touches the cluster icon itself, only the individual markers.
     const dbMarkerCluster = L.markerClusterGroup({
       iconCreateFunction: function (cluster) {
@@ -259,23 +259,23 @@
     const dbIconCache = {};
 
     // Colors are assigned by order of first appearance (oldest timestamp
-    // per pseudonym among the currently loaded entries), rotating through
-    // DB_MARKER_COLORS — so the 11th distinct active pseudonym reuses the
+    // per label among the currently loaded entries), rotating through
+    // DB_MARKER_COLORS — so the 11th distinct active label reuses the
     // 1st's color. Recomputed on every load, so as older entries age out of
     // the 24h window, "first appearance" (and therefore the color) can
     // shift — acceptable trade-off for a handful of family/friends users.
     function assignColorsByFirstSeen(entries) {
       const firstSeen = {};
       entries.forEach((e) => {
-        if (!firstSeen[e.pseudonym] || e.timestamp < firstSeen[e.pseudonym]) {
-          firstSeen[e.pseudonym] = e.timestamp;
+        if (!firstSeen[e.label] || e.timestamp < firstSeen[e.label]) {
+          firstSeen[e.label] = e.timestamp;
         }
       });
-      const orderedPseudonyms = Object.keys(firstSeen).sort((a, b) =>
+      const orderedLabels = Object.keys(firstSeen).sort((a, b) =>
         firstSeen[a].localeCompare(firstSeen[b])
       );
       const colorMap = {};
-      orderedPseudonyms.forEach((p, i) => {
+      orderedLabels.forEach((p, i) => {
         colorMap[p] = DB_MARKER_COLORS[i % DB_MARKER_COLORS.length];
       });
       return colorMap;
@@ -296,7 +296,7 @@
     const statusEl = document.getElementById("status");
     const postBtn = document.getElementById("postBtn");
     const recenterBtn = document.getElementById("recenterBtn");
-    const pseudonymInput = document.getElementById("pseudonym");
+    const labelInput = document.getElementById("label");
     const focusRow = document.getElementById("focusRow");
     const focusSelect = document.getElementById("focusSelect");
     const allBtn = document.getElementById("allBtn");
@@ -355,47 +355,47 @@
 
     function renderDbMarkers(entries) {
       // entries is ordered newest-first (timestamp.desc), can contain
-      // multiple rows per pseudonym (history, up to 50 each). Every row
-      // gets its own pin; latestMarkerByPseudonym additionally tracks just
-      // the newest marker per pseudonym, for the focus dropdown.
+      // multiple rows per label (history, up to 50 each). Every row
+      // gets its own pin; latestMarkerByLabel additionally tracks just
+      // the newest marker per label, for the focus dropdown.
       dbMarkerCluster.clearLayers();
       allDbMarkers = [];
-      latestMarkerByPseudonym = {};
+      latestMarkerByLabel = {};
       const colorMap = assignColorsByFirstSeen(entries);
       entries.forEach((entry) => {
-        const icon = getDbIcon(colorMap[entry.pseudonym]);
+        const icon = getDbIcon(colorMap[entry.label]);
         const marker = L.marker([entry.lat, entry.lng], { icon });
         marker.bindPopup(
-          `<strong>${escapeHtml(entry.pseudonym)}</strong><br>${formatTime(entry.timestamp)}`
+          `<strong>${escapeHtml(entry.label)}</strong><br>${formatTime(entry.timestamp)}`
         );
         dbMarkerCluster.addLayer(marker);
         allDbMarkers.push(marker);
-        if (!latestMarkerByPseudonym[entry.pseudonym]) {
-          latestMarkerByPseudonym[entry.pseudonym] = marker;
+        if (!latestMarkerByLabel[entry.label]) {
+          latestMarkerByLabel[entry.label] = marker;
         }
       });
     }
 
     function renderFocusRow(entries) {
-      // Dedupe to one dropdown entry per pseudonym — first occurrence wins
+      // Dedupe to one dropdown entry per label — first occurrence wins
       // since entries is ordered newest-first.
       const seen = new Set();
-      const uniquePseudonyms = [];
+      const uniqueLabels = [];
       entries.forEach((e) => {
-        if (!seen.has(e.pseudonym)) {
-          seen.add(e.pseudonym);
-          uniquePseudonyms.push(e.pseudonym);
+        if (!seen.has(e.label)) {
+          seen.add(e.label);
+          uniqueLabels.push(e.label);
         }
       });
 
-      if (uniquePseudonyms.length === 0) {
+      if (uniqueLabels.length === 0) {
         focusRow.hidden = true;
         return;
       }
       focusRow.hidden = false;
       focusSelect.innerHTML =
         '<option value="">— fokussieren —</option>' +
-        uniquePseudonyms
+        uniqueLabels
           .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
           .join("");
     }
@@ -444,9 +444,9 @@
     });
 
     focusSelect.addEventListener("change", () => {
-      const pseudonym = focusSelect.value;
-      if (!pseudonym) return;
-      const marker = latestMarkerByPseudonym[pseudonym];
+      const label = focusSelect.value;
+      if (!label) return;
+      const marker = latestMarkerByLabel[label];
       if (marker) {
         collapsePanel();
         // zoomToShowLayer (statt setView) zoomt genau so weit rein, bis der
@@ -468,10 +468,10 @@
     });
 
     postBtn.addEventListener("click", async () => {
-      const pseudonym = pseudonymInput.value.trim();
-      if (!pseudonym) {
-        showStatus("Bitte Pseudonym eingeben.", true);
-        pseudonymInput.focus();
+      const label = labelInput.value.trim();
+      if (!label) {
+        showStatus("Bitte Label eingeben.", true);
+        labelInput.focus();
         return;
       }
       if (!myMarker) {
@@ -487,7 +487,7 @@
         const res = await fetch("/location/set", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pseudonym, lat, lng })
+          body: JSON.stringify({ label, lat, lng })
         });
         if (!res.ok) throw new Error("request failed");
 
