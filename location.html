@@ -138,14 +138,9 @@
       cursor: default;
     }
 
-    .my-marker-dot {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #1976d2;
-      border: 3px solid white;
-      box-shadow: 0 0 0 2px #1976d2;
-      cursor: grab;
+    .my-marker-icon svg {
+      display: block;
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
     }
 
     .db-marker-dot {
@@ -201,7 +196,7 @@
   <div class="panel">
     <label for="label">Label*</label>
     <input type="text" id="label" placeholder="z.B. Tucan123" maxlength="64" autocomplete="off">
-    <p class="hint">Unter diesem Label wird die Position des blauen Kreises gespeichert. Du kannst den Kreis auf der Karte verschieben.</p>
+    <p class="hint">Unter diesem Label wird die Position des blauen Pins gespeichert. Du kannst den Pin auf der Karte verschieben.</p>
     <button id="postBtn">Position posten</button>
     <button id="recenterBtn" type="button" class="link-btn">Standort neu ermitteln</button>
 
@@ -245,11 +240,18 @@
       }
     }).addTo(map);
 
+    // Deliberately a slim pin (point touches the exact spot) rather than a
+    // dot like the DB markers below — "You" is a live, draggable position,
+    // not a past stored entry, and the shape should say so at a glance.
     const myIcon = L.divIcon({
       className: "my-marker-icon",
-      html: '<div class="my-marker-dot"></div>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
+      html: `<svg width="26" height="34" viewBox="0 0 26 34" xmlns="http://www.w3.org/2000/svg">
+        <path d="M13 0C5.8 0 0 5.8 0 13c0 9.5 13 21 13 21s13-11.5 13-21C26 5.8 20.2 0 13 0z" fill="#1976d2"/>
+        <circle cx="13" cy="12.5" r="4.5" fill="#fff"/>
+      </svg>`,
+      iconSize: [26, 34],
+      iconAnchor: [13, 34],
+      popupAnchor: [0, -30]
     });
 
     const DB_MARKER_COLORS = [
