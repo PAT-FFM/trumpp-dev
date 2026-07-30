@@ -7,7 +7,9 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Standort – trumpp.dev</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" crossorigin=""></script>
   <style>
     * {
       box-sizing: border-box;
@@ -227,6 +229,22 @@
     let allDbMarkers = [];
     let latestMarkerByPseudonym = {};
 
+    // Nearby DB pins collapse into a single neutral cluster icon (plain
+    // black circle with a count) so a spot with several stacked pins isn't
+    // mistaken for just one. Zooming in spreads them back out into their
+    // normal per-pseudonym colored markers — the color logic below never
+    // touches the cluster icon itself, only the individual markers.
+    const dbMarkerCluster = L.markerClusterGroup({
+      iconCreateFunction: function (cluster) {
+        const count = cluster.getChildCount();
+        return L.divIcon({
+          html: `<div style="background:#000;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid white;">${count}</div>`,
+          className: "",
+          iconSize: [32, 32]
+        });
+      }
+    }).addTo(map);
+
     const myIcon = L.divIcon({
       className: "my-marker-icon",
       html: '<div class="my-marker-dot"></div>',
@@ -340,16 +358,17 @@
       // multiple rows per pseudonym (history, up to 50 each). Every row
       // gets its own pin; latestMarkerByPseudonym additionally tracks just
       // the newest marker per pseudonym, for the focus dropdown.
-      allDbMarkers.forEach((m) => map.removeLayer(m));
+      dbMarkerCluster.clearLayers();
       allDbMarkers = [];
       latestMarkerByPseudonym = {};
       const colorMap = assignColorsByFirstSeen(entries);
       entries.forEach((entry) => {
         const icon = getDbIcon(colorMap[entry.pseudonym]);
-        const marker = L.marker([entry.lat, entry.lng], { icon }).addTo(map);
+        const marker = L.marker([entry.lat, entry.lng], { icon });
         marker.bindPopup(
           `<strong>${escapeHtml(entry.pseudonym)}</strong><br>${formatTime(entry.timestamp)}`
         );
+        dbMarkerCluster.addLayer(marker);
         allDbMarkers.push(marker);
         if (!latestMarkerByPseudonym[entry.pseudonym]) {
           latestMarkerByPseudonym[entry.pseudonym] = marker;
@@ -430,8 +449,12 @@
       const marker = latestMarkerByPseudonym[pseudonym];
       if (marker) {
         collapsePanel();
-        map.setView(marker.getLatLng(), 15);
-        marker.openPopup();
+        // zoomToShowLayer (statt setView) zoomt genau so weit rein, bis der
+        // Marker aus seinem Cluster "herausfällt" — ein festes Zoom-Level
+        // würde ihn sonst ggf. weiterhin geclustert lassen.
+        dbMarkerCluster.zoomToShowLayer(marker, () => {
+          marker.openPopup();
+        });
       }
     });
 
