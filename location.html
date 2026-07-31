@@ -224,6 +224,8 @@
       <button id="allBtn" type="button">Alle Pins</button>
     </div>
 
+    <button id="hideBtn" type="button" class="link-btn">Bedienfeld verstecken</button>
+
     <div id="status"></div>
   </div>
 
@@ -319,6 +321,7 @@
     const focusRow = document.getElementById("focusRow");
     const focusSelect = document.getElementById("focusSelect");
     const allBtn = document.getElementById("allBtn");
+    const hideBtn = document.getElementById("hideBtn");
     const panelEl = document.querySelector(".panel");
     const panelHandle = document.getElementById("panelHandle");
     const dateSelect = document.getElementById("dateSelect");
@@ -364,6 +367,7 @@
     }
 
     panelHandle.addEventListener("click", expandPanel);
+    hideBtn.addEventListener("click", collapsePanel);
 
     function formatTime(isoString) {
       return new Date(isoString).toLocaleTimeString("de-DE", {
