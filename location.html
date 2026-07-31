@@ -150,6 +150,18 @@
       border: 3px solid white;
     }
 
+    .date-row {
+      margin-bottom: 0.85rem;
+    }
+
+    .date-row select {
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 0.95rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
     .focus-row {
       display: flex;
       gap: 0.5rem;
@@ -194,6 +206,11 @@
   <div id="map"></div>
 
   <div class="panel">
+    <div class="date-row">
+      <label for="dateSelect">Tag</label>
+      <select id="dateSelect"></select>
+    </div>
+
     <label for="label">Label*</label>
     <input type="text" id="label" placeholder="z.B. Tucan123" maxlength="64" autocomplete="off">
     <p class="hint">Unter diesem Label wird die Position des blauen Pins gespeichert. Du kannst den Pin auf der Karte verschieben.</p>
@@ -304,6 +321,32 @@
     const allBtn = document.getElementById("allBtn");
     const panelEl = document.querySelector(".panel");
     const panelHandle = document.getElementById("panelHandle");
+    const dateSelect = document.getElementById("dateSelect");
+
+    // "Day" always means a Europe/Berlin calendar day, never the viewer's
+    // device timezone — this tracker is for a German family/friends group,
+    // and someone traveling shouldn't shift what "today" means for everyone
+    // watching. All day-boundary math (UTC conversion) happens server-side;
+    // here we only ever need the Berlin *date string* for display and for
+    // picking which day to request.
+    //
+    // en-CA formats numeric dates as YYYY-MM-DD (Canada's date convention
+    // happens to follow ISO 8601) — a common trick to get Intl to hand back
+    // an ISO-shaped string without building it from formatToParts by hand.
+    const berlinDateFormat = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Berlin" });
+
+    function todayBerlinDateStr() {
+      return berlinDateFormat.format(new Date());
+    }
+
+    function formatDateLabel(dateStr) {
+      const [y, m, d] = dateStr.split("-").map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString("de-DE", {
+        day: "2-digit", month: "2-digit", year: "numeric"
+      });
+    }
+
+    let selectedDate = todayBerlinDateStr();
 
     function showStatus(message, isError) {
       statusEl.textContent = message;
@@ -410,7 +453,7 @@
 
     async function loadEntries() {
       try {
-        const res = await fetch("/location/all");
+        const res = await fetch(`/location/all?date=${encodeURIComponent(selectedDate)}`);
         if (!res.ok) throw new Error("request failed");
         const entries = await res.json();
         renderDbMarkers(entries);
@@ -418,6 +461,29 @@
       } catch {
         // silently skip — own position still works without DB pins
       }
+    }
+
+    async function loadAvailableDays() {
+      // "Heute" is always offered, even with zero entries — it's the
+      // default view. Other days only show up once they actually have pins.
+      // The day list itself comes straight from the location_days() RPC
+      // (distinct Europe/Berlin calendar days, computed on the DB side).
+      const today = todayBerlinDateStr();
+      const days = new Set([today]);
+      try {
+        const res = await fetch("/location/days");
+        if (res.ok) {
+          const rows = await res.json();
+          rows.forEach((r) => days.add(r.day));
+        }
+      } catch {
+        // keep just "Heute" if the request fails
+      }
+      const sortedDays = Array.from(days).sort().reverse();
+      dateSelect.innerHTML = sortedDays
+        .map((d) => `<option value="${d}">${d === today ? "Heute" : formatDateLabel(d)}</option>`)
+        .join("");
+      dateSelect.value = selectedDate;
     }
 
     const POLL_INTERVAL_MS = 5000;
@@ -435,13 +501,26 @@
 
     // Pause polling while the tab is hidden — no point burning Supabase
     // free-tier requests for a map nobody is looking at; catch up
-    // immediately on return instead of waiting for the next tick.
+    // immediately on return instead of waiting for the next tick. Also
+    // never poll while viewing a past day — that data is static, only
+    // "today" can still receive new posts.
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) {
         stopPolling();
       } else {
         loadEntries();
+        if (selectedDate === todayBerlinDateStr()) startPolling();
+      }
+    });
+
+    dateSelect.addEventListener("change", () => {
+      selectedDate = dateSelect.value;
+      focusSelect.value = "";
+      loadEntries();
+      if (selectedDate === todayBerlinDateStr()) {
         startPolling();
+      } else {
+        stopPolling();
       }
     });
 
@@ -498,6 +577,15 @@
         focusSelect.value = "";
         showStatus("Position gepostet.", false);
 
+        // A post always happens "now" — jump the view back to today so the
+        // just-posted pin is actually visible, even if the user had a past
+        // day selected (e.g. after browsing history, then posting).
+        const today = todayBerlinDateStr();
+        if (selectedDate !== today) {
+          selectedDate = today;
+          startPolling();
+        }
+        await loadAvailableDays();
         await loadEntries();
       } catch (err) {
         showStatus("Position konnte nicht gepostet werden.", true);
@@ -523,6 +611,7 @@
     });
 
     async function init() {
+      await loadAvailableDays();
       const [posResult] = await Promise.allSettled([getFreshPosition(), loadEntries()]);
       if (posResult.status === "fulfilled") {
         const { latitude, longitude } = posResult.value.coords;

@@ -162,9 +162,11 @@ The edge functions and worker expect these tables/RPCs:
 |---|---|---|
 | `visits` | table | `hello.js` (insert), `stats-auth.js` (query) |
 | `chat_logs` | table | `mcp.js` (insert) |
+| `locations` | table | `location.js` (insert, query) |
 | `visits_per_day` | RPC | `stats-auth.js` |
 | `top_cities` | RPC | `stats-auth.js` |
 | `german_visits` | RPC | `stats-auth.js` |
+| `location_days` | RPC | `location.js` — distinct Europe/Berlin calendar days with entries |
 
 ## Development Notes
 
@@ -182,7 +184,8 @@ The edge functions and worker expect these tables/RPCs:
 Minimalistic multi-user location tracker with no login/auth, for Peter's
 family & friends only — **not a general trumpp.dev website feature**. Users
 enter a self-chosen label; the current position is posted under it.
-Others see all label positions from the last 24h on a shared map.
+Others see all label positions from a selected day (default: today, always
+a Europe/Berlin calendar day — see "Day selection" below) on a shared map.
 
 No claim to security or uniqueness: anyone who knows the URL can post under
 any label and read all positions. No password protection, no protection
@@ -205,17 +208,29 @@ separate document).
   in `robots.txt` like `/stats`):
   - Map with two pin types: **"You"** (own position, draggable, not
     persisted until posted, always blue) and **DB pins** — one pin per
-    stored row, not per label, from the last 24h from Supabase, so a
-    label with several posts shows as a short trail of pins. DB pins are
+    stored row, not per label, from the selected day, so a label with
+    several posts that day shows as a short trail of pins. DB pins are
     colored per label from a 10-color rotating palette, assigned by
     order of first appearance among the currently loaded entries (the 11th
     distinct active label reuses the 1st's color) — so a person's trail
     is visually consistent and distinguishable from others. Recomputed on
-    every load, so the color can drift slowly as older entries age out of
-    the 24h window; acceptable for a handful of family/friends users. Tap/
-    click on a pin opens a popup with label + timestamp (`HH:MM:SS`,
-    deliberately `bindPopup()` instead of a hover tooltip, since hover
-    doesn't exist on touch devices).
+    every load, so the color can drift as the set of loaded entries changes
+    (switching days, or new posts arriving today); acceptable for a
+    handful of family/friends users. Tap/click on a pin opens a popup with
+    label + timestamp (`HH:MM:SS`, deliberately `bindPopup()` instead of a
+    hover tooltip, since hover doesn't exist on touch devices).
+  - **Day selection:** a dropdown (top of the panel) picks which day's pins
+    are shown. Default and always-present option: "Heute" (today). Other
+    options only appear once they have at least one entry, sourced from the
+    `location_days` RPC (distinct days, DB-side `DISTINCT`, not fetched-and
+    -bucketed client-side). "Day" is always a **Europe/Berlin** calendar
+    day, computed server-side in `location.js` — deliberately not the
+    viewing device's local timezone, since a traveling family member's
+    phone auto-switching timezone must not shift what "today" means for
+    everyone else looking at the map. Live polling (every 5s) only runs
+    while viewing today; past days are static and don't need it. Posting a
+    position always jumps the view back to "today" (a post is always
+    "now"), even if a past day was selected.
   - Initial map centering: own live position (via `getCurrentPosition()`) at
     street-level zoom. The geolocation permission prompt fires immediately
     on load — that's the whole point of the page; a use case of "view
@@ -229,7 +244,7 @@ separate document).
     dragging it may not be. A separate "Refresh location" link re-fetches a
     fresh GPS position and resets the pin there. Helper text directly under
     the label field explains the link between pin and label.
-  - Focus row (only shown if DB entries from the last 24h exist): dropdown
+  - Focus row (only shown if the selected day has DB entries): dropdown
     with existing labels, deduplicated to one entry per label (on
     change: map pans/zooms to that label's *newest* pin, other pins stay
     visible; also collapses the panel, see below) + separate "Show all pins"
@@ -252,10 +267,18 @@ separate document).
 - **Frontend:** plain HTML/JS, no framework needed
 - **API access:** no Supabase key in the browser. A new
   `netlify/edge-functions/location.js` proxies server-side (service role
-  key, same pattern as `stats-auth.js`), two endpoints:
-  - `GET /location/all` → all entries from the last 24h (label, lat,
-    lng, timestamp), newest first — feeds map pins directly; the dropdown
-    dedupes client-side to the newest entry per label
+  key, same pattern as `stats-auth.js`), three endpoints:
+  - `GET /location/all?date=YYYY-MM-DD` → all entries for that Europe/Berlin
+    calendar day (label, lat, lng, timestamp), newest first — feeds map pins
+    directly; the label dropdown dedupes client-side to the newest entry per
+    label. `date` is validated server-side (`YYYY-MM-DD` shape); missing/
+    invalid falls back to the old last-24h window. Day-boundary→UTC
+    conversion happens in `location.js` via `Intl`, fixed to `Europe/Berlin`
+    regardless of the requester's own timezone.
+  - `GET /location/days` → distinct days that have entries, via the
+    `location_days` RPC (DB-side `DISTINCT`, same pattern as
+    `visits_per_day`/`top_cities`/`german_visits` in `stats-auth.js`) —
+    feeds the day-selection dropdown.
   - `POST /location/set` → plain insert of a new position under a
     label (not an upsert — see "Data model" for why)
 - **Abuse hardening on `POST /location/set`** (basic speed bumps, not real
@@ -307,6 +330,21 @@ Both guard against a spam script flooding the table, either with many
 distinct fake labels (global cap) or many rapid posts under one
 label (per-label cap). Set up manually via the Supabase SQL editor,
 not part of this repo (no migrations tooling here).
+
+RPC `location_days()` — returns the distinct Europe/Berlin calendar days
+that have at least one row, newest first:
+
+```sql
+create or replace function location_days()
+returns table(day date) as $$
+  select distinct (timestamp at time zone 'Europe/Berlin')::date as day
+  from locations
+  order by day desc;
+$$ language sql stable;
+```
+
+Also set up manually via the Supabase SQL editor, same as the triggers
+above — not part of this repo.
 
 ### Explicitly out of scope (v1)
 
