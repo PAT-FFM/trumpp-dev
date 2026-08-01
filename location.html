@@ -706,14 +706,18 @@
 
       try {
         await sendPosition(entry);
-        await onPositionAccepted(lat, lng, false);
+        await onPositionAccepted(lat, lng);
       } catch (err) {
         if (isNetworkError(err)) {
           // No connection right now (dead zone) — keep the position locally
           // and send it automatically once we're back online, instead of
-          // just reporting failure and losing the click.
+          // just reporting failure and losing the click. The pending-count
+          // hint (updateQueueHint) is the single place that communicates
+          // "still waiting for a connection" — #status just confirms the
+          // click was accepted, same as the immediate-success case, so the
+          // two don't end up saying overlapping things.
           queuePost(entry);
-          await onPositionAccepted(lat, lng, true);
+          await onPositionAccepted(lat, lng);
         } else {
           showStatus("Position konnte nicht gepostet werden.", true);
         }
@@ -722,16 +726,11 @@
       }
     });
 
-    async function onPositionAccepted(lat, lng, queued) {
+    async function onPositionAccepted(lat, lng) {
       map.setView([lat, lng], 15);
       myMarker.openPopup();
       focusSelect.value = "";
-      showStatus(
-        queued
-          ? "Kein Netz — Position wird automatisch gesendet, sobald wieder Verbindung da ist."
-          : "Position gepostet.",
-        false
-      );
+      showStatus("Position gepostet.", false);
 
       // A post always happens "now" — jump the view to today so the
       // just-posted pin is actually visible, even if the user had a past
