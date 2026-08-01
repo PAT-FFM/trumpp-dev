@@ -237,6 +237,17 @@ separate document).
     positions without sharing your own" is not supported.
   - The "You" pin is **draggable** — lets the user correct a slightly-off
     GPS fix or deliberately mark a nearby place before arriving there.
+  - **Follow mode:** besides the initial one-shot fix, `location.html` also
+    runs `watchPosition()` continuously — the "You" pin and map view track
+    live GPS automatically (e.g. while cycling), no manual re-centering
+    needed. Follow mode turns off the instant the pin is dragged (a
+    `dragstart` listener, not `dragend` — must beat a GPS update landing
+    mid-drag) so a manual correction isn't immediately overwritten by the
+    next fix; the map itself can still be freely panned/zoomed without
+    affecting it. Re-enabled by "Standort neu ermitteln", which is now both
+    "fetch a fresh fix" and "resume following". Watch errors (brief signal
+    loss while moving) are silently ignored — same "don't interrupt for
+    something transient" reasoning as elsewhere in this feature.
   - Required label field + "Post position" button: posts whichever
     coordinates the "You" pin currently shows (GPS or manually dragged), not
     a fresh GPS fetch — dragging would otherwise be overwritten on every
@@ -341,9 +352,27 @@ while briefly unreachable."
   the dropdown itself) falls back to whichever day's entries are actually
   still rendered on the map (`loadedDate` in `location.html`) — otherwise the
   dropdown could claim to show a day the map isn't actually displaying.
+- **App-shell service worker (`location-sw.js`):** covers a distinct
+  failure mode discovered in real use — Android eventually kills the
+  background browser tab/process while the phone is locked (independent of
+  whether e.g. Spotify is still playing audio in the background; that keeps
+  only Spotify's own process alive, not other backgrounded tabs). A plain
+  reload afterwards needs the network to fetch `location.html` + the Leaflet
+  CDN assets — which fails if that reload happens to land in a dead zone,
+  defeating the post queue above since the page can't even start. The
+  service worker precaches just those shell assets (registered with `scope:
+  "/location"`, so it never touches the main trumpp.dev site) — own HTML is
+  network-first with cache fallback (so a normal online reload always gets
+  the latest version, no manual cache-version bump needed per deploy); the
+  pinned/versioned Leaflet CDN URLs are cache-first (they never change under
+  the same URL). `/location/all`, `/location/days`, `/location/set` are
+  explicitly excluded from the service worker's fetch handling — they must
+  always hit the network so the stale-hint/queue logic above keeps seeing
+  genuine failures rather than something silently served stale.
 - Explicitly **not** attempted: caching map tiles or DB pins for full
-  offline viewing (PWA/service worker) — out of scope, this only covers
-  posting through a temporary dead zone while the page stays open.
+  offline viewing/browsing — the service worker only guarantees the page
+  itself (and the post form) can open with no signal; live data still needs
+  a connection.
 
 ### Data model
 

@@ -234,6 +234,17 @@
   <button id="panelHandle" class="panel-handle" type="button">Bedienfeld anzeigen</button>
 
   <script>
+    // App-shell cache so the page still opens with no signal at all after
+    // the browser/OS kills the background tab — see location-sw.js and
+    // CLAUDE.md ("Connectivity resilience"). Scope limited to /location so
+    // this never touches the main trumpp.dev site. Registration failure
+    // (unsupported browser, non-HTTPS local dev) is silently ignored —
+    // the page works the same either way, just without the offline-reload
+    // safety net.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/location-sw.js", { scope: "/location" }).catch(() => {});
+    }
+
     const map = L.map("map", { zoomControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
@@ -244,6 +255,12 @@
     let myMarker = null;
     let allDbMarkers = [];
     let latestMarkerByLabel = {};
+
+    // While true, live GPS updates move the "You" marker and pan the map
+    // to follow — off once the marker is dragged, so a correction/pre-
+    // placement isn't immediately overwritten by the next GPS fix.
+    // Re-enabled by "Standort neu ermitteln".
+    let followMode = true;
 
     // Nearby DB pins collapse into a single neutral cluster icon (plain
     // black circle with a count) so a spot with several stacked pins isn't
@@ -408,12 +425,35 @@
       });
     }
 
+    // Continuous GPS updates (e.g. while cycling) — separate from
+    // getFreshPosition()'s one-shot fetch used for the initial center and
+    // "Standort neu ermitteln". Errors (brief signal loss while moving)
+    // are expected and silently ignored — the marker just stays at its
+    // last known fix until the next good one, no need to interrupt the
+    // user with a status message for something transient.
+    function startWatchingPosition() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          if (!followMode) return;
+          const { latitude, longitude } = pos.coords;
+          updateMyMarker(latitude, longitude);
+          map.panTo([latitude, longitude]);
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 5000 }
+      );
+    }
+
     function updateMyMarker(lat, lng) {
       if (myMarker) {
         myMarker.setLatLng([lat, lng]);
       } else {
         myMarker = L.marker([lat, lng], { icon: myIcon, draggable: true, zIndexOffset: 1000 }).addTo(map);
         myMarker.bindPopup("Du");
+        myMarker.on("dragstart", () => {
+          followMode = false;
+        });
         myMarker.on("dragend", () => {
           showStatus("Position angepasst — wird beim nächsten Posten verwendet.", false);
         });
@@ -753,6 +793,7 @@
       try {
         const pos = await getFreshPosition();
         const { latitude, longitude } = pos.coords;
+        followMode = true;
         updateMyMarker(latitude, longitude);
         map.setView([latitude, longitude], 15);
         showStatus("Standort aktualisiert.", false);
@@ -783,6 +824,7 @@
         showStatus("Standortzugriff nicht möglich – bitte Berechtigung erteilen.", true);
       }
       startPolling();
+      startWatchingPosition();
       flushQueue();
     }
 
