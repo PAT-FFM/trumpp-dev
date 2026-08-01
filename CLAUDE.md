@@ -280,7 +280,10 @@ separate document).
     `visits_per_day`/`top_cities`/`german_visits` in `stats-auth.js`) —
     feeds the day-selection dropdown.
   - `POST /location/set` → plain insert of a new position under a
-    label (not an upsert — see "Data model" for why)
+    label (not an upsert — see "Data model" for why). Accepts an optional
+    client-supplied `timestamp` (ISO string), used instead of the server's
+    own clock if present and within a bounded window (5 min future / 7 days
+    past) — see "Connectivity resilience" below for why.
 - **Abuse hardening on `POST /location/set`** (basic speed bumps, not real
   security — see "Explicitly out of scope"):
   - Origin allowlist (`trumpp.dev`, `www.trumpp.dev`), same list as
@@ -295,6 +298,42 @@ separate document).
     edge isolate, resets on cold start, not shared across edge locations.
     No Cloudflare-style rate-limiter binding available on Netlify Edge
     Functions, so this is the pragmatic substitute.
+
+### Connectivity resilience (dead zones)
+
+The use case: coverage in Germany is generally fine, but the tracker should
+still work for a stretch with no signal at all (e.g. an hour in the woods) —
+not full offline-first/PWA support, just "don't lose a click that happened
+while briefly unreachable."
+
+- **Post queue:** if `POST /location/set` fails with a genuine network error
+  (`fetch` throwing `TypeError`/`AbortError` — not a real server response
+  like a 400/429), the entry is kept in `localStorage`
+  (`location_pending_posts`) instead of being reported as a failure. Retried
+  oldest-first on the browser's `online` event and on a 20s interval timer
+  (the `online` event alone only reflects the network interface, not actual
+  reachability, so the interval is the real fallback). `localStorage`, not
+  IndexedDB — a handful of small JSON records don't need the extra
+  complexity, and it survives a reload while still offline. A small hint in
+  the panel shows the pending count.
+- **Client-captured timestamp:** a queued post carries the timestamp from
+  the moment of the original click, not the moment it eventually reaches the
+  server — otherwise a position captured in a dead zone at 14:00 but sent at
+  15:00 would display as if the person was there at 15:00. The edge function
+  trusts this client-supplied timestamp (bounded window, see above) — a
+  deliberate choice consistent with this feature's existing "no auth, no
+  integrity guarantees" model (see "Explicitly out of scope").
+- **Stale-data hint:** `GET /location/all` and `GET /location/days` failures
+  (same dead-zone case, or just a flaky load) no longer fail silently — a
+  small hint shows "no connection, showing state from HH:MM:SS" (or "no
+  positions loaded yet" before the first successful load) so a viewer
+  focusing a label or hitting "Show all pins" isn't misled into thinking
+  what's on screen is current. All three GET/POST requests go through an
+  8s-timeout fetch wrapper so a hanging request (flaky signal, not a clean
+  failure) is treated as offline promptly rather than stalling the UI.
+- Explicitly **not** attempted: caching map tiles or DB pins for full
+  offline viewing (PWA/service worker) — out of scope, this only covers
+  posting through a temporary dead zone while the page stays open.
 
 ### Data model
 

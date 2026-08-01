@@ -166,6 +166,25 @@ export default async (req, context) => {
       });
     }
 
+    // Client may supply its own capture timestamp — a position queued while
+    // offline (dead zone) and sent later should keep the time it was actually
+    // captured, not the time the request happened to reach the server.
+    // Trusting a client-supplied timestamp fits this feature's existing "no
+    // auth, no integrity guarantees" model; bounded to a sane window so a
+    // broken/malicious client can't wildly back- or postdate an entry.
+    const MAX_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
+    const MAX_TIMESTAMP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+    let timestamp = new Date().toISOString();
+    if (typeof body.timestamp === "string") {
+      const parsedMs = Date.parse(body.timestamp);
+      const nowMs = Date.now();
+      if (!Number.isNaN(parsedMs) &&
+          parsedMs <= nowMs + MAX_TIMESTAMP_SKEW_MS &&
+          parsedMs >= nowMs - MAX_TIMESTAMP_AGE_MS) {
+        timestamp = new Date(parsedMs).toISOString();
+      }
+    }
+
     const res = await fetch(`${supabaseUrl}/rest/v1/locations`, {
       method: "POST",
       headers: {
@@ -174,7 +193,7 @@ export default async (req, context) => {
         "Content-Type": "application/json",
         "Prefer": "return=minimal"
       },
-      body: JSON.stringify({ label, lat, lng, timestamp: new Date().toISOString() })
+      body: JSON.stringify({ label, lat, lng, timestamp })
     });
 
     if (!res.ok) {

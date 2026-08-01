@@ -210,6 +210,7 @@
       <label for="dateSelect">Tag</label>
       <select id="dateSelect"></select>
     </div>
+    <p class="hint" id="staleHint" hidden></p>
 
     <label for="label">Label*</label>
     <input type="text" id="label" placeholder="z.B. Tucan123" maxlength="64" autocomplete="off">
@@ -226,6 +227,7 @@
 
     <button id="hideBtn" type="button" class="link-btn">Bedienfeld verstecken</button>
 
+    <p class="hint" id="queueHint" hidden></p>
     <div id="status"></div>
   </div>
 
@@ -325,6 +327,22 @@
     const panelEl = document.querySelector(".panel");
     const panelHandle = document.getElementById("panelHandle");
     const dateSelect = document.getElementById("dateSelect");
+    const staleHint = document.getElementById("staleHint");
+    const queueHint = document.getElementById("queueHint");
+
+    // Aborts a fetch after timeoutMs — on flaky mobile signal a request can
+    // otherwise hang far longer than a genuine dead zone would need to fail,
+    // delaying the point where we treat it as offline (queue the post / show
+    // the stale hint).
+    function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      return fetch(url, { ...options, signal: controller.signal }).finally(() => clearTimeout(timer));
+    }
+
+    function isNetworkError(err) {
+      return err instanceof TypeError || err.name === "AbortError";
+    }
 
     // "Day" always means a Europe/Berlin calendar day, never the viewer's
     // device timezone — this tracker is for a German family/friends group,
@@ -455,15 +473,35 @@
       return div.innerHTML;
     }
 
+    // Tracks the last successful load so the stale hint can say what's
+    // actually still on screen ("Stand von HH:MM:SS") rather than just
+    // "no connection" — null until the first successful load ever happens.
+    let lastSyncAt = null;
+
+    function markSyncOk() {
+      lastSyncAt = new Date();
+      staleHint.hidden = true;
+    }
+
+    function markSyncFailed() {
+      staleHint.hidden = false;
+      staleHint.textContent = lastSyncAt
+        ? `Keine Verbindung – zeige Stand von ${formatTime(lastSyncAt.toISOString())}.`
+        : "Keine Verbindung – Positionen konnten noch nicht geladen werden.";
+    }
+
     async function loadEntries() {
       try {
-        const res = await fetch(`/location/all?date=${encodeURIComponent(selectedDate)}`);
+        const res = await fetchWithTimeout(`/location/all?date=${encodeURIComponent(selectedDate)}`);
         if (!res.ok) throw new Error("request failed");
         const entries = await res.json();
         renderDbMarkers(entries);
         renderFocusRow(entries);
+        markSyncOk();
       } catch {
-        // silently skip — own position still works without DB pins
+        // own position still works without DB pins — just flag that what's
+        // shown may be outdated instead of silently pretending it's current
+        markSyncFailed();
       }
     }
 
@@ -475,7 +513,7 @@
       const today = todayBerlinDateStr();
       const days = new Set([today]);
       try {
-        const res = await fetch("/location/days");
+        const res = await fetchWithTimeout("/location/days");
         if (res.ok) {
           const rows = await res.json();
           rows.forEach((r) => days.add(r.day));
@@ -488,6 +526,85 @@
         .map((d) => `<option value="${d}">${d === today ? "Heute" : formatDateLabel(d)}</option>`)
         .join("");
       dateSelect.value = selectedDate;
+    }
+
+    // Offline post queue — a position "posted" in a dead zone (POST fails
+    // with a network error, not a real server response) is kept here and
+    // resent once connectivity returns, instead of just failing outright.
+    // localStorage rather than IndexedDB: a handful of small JSON records,
+    // no need for the added complexity, and it survives a page reload while
+    // still offline.
+    const PENDING_KEY = "location_pending_posts";
+
+    function loadPendingPosts() {
+      try {
+        return JSON.parse(localStorage.getItem(PENDING_KEY)) || [];
+      } catch {
+        return [];
+      }
+    }
+
+    function savePendingPosts(list) {
+      localStorage.setItem(PENDING_KEY, JSON.stringify(list));
+    }
+
+    function updateQueueHint() {
+      const count = loadPendingPosts().length;
+      if (count === 0) {
+        queueHint.hidden = true;
+        return;
+      }
+      queueHint.hidden = false;
+      queueHint.textContent = count === 1
+        ? "1 Position wartet auf Verbindung und wird automatisch gesendet."
+        : `${count} Positionen warten auf Verbindung und werden automatisch gesendet.`;
+    }
+
+    function queuePost(entry) {
+      const list = loadPendingPosts();
+      list.push(entry);
+      savePendingPosts(list);
+      updateQueueHint();
+    }
+
+    // timestamp is captured client-side at the moment of the click (the
+    // actual position-capture time), not the moment the request eventually
+    // reaches the server — see location.js, which trusts this timestamp
+    // within a bounded window precisely so a delayed dead-zone post keeps
+    // showing when it really happened.
+    async function sendPosition({ label, lat, lng, timestamp }) {
+      const res = await fetchWithTimeout("/location/set", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label, lat, lng, timestamp })
+      });
+      if (!res.ok) throw new Error("request failed");
+    }
+
+    // Retries queued posts oldest-first, stopping at the first one that
+    // still fails — if we're still offline, there's no point burning
+    // requests on the rest; they'll be retried on the next tick.
+    async function flushQueue() {
+      const list = loadPendingPosts();
+      if (list.length === 0) return;
+
+      let progressed = false;
+      while (list.length > 0) {
+        try {
+          await sendPosition(list[0]);
+          list.shift();
+          progressed = true;
+        } catch {
+          break;
+        }
+      }
+      savePendingPosts(list);
+      updateQueueHint();
+
+      if (progressed) {
+        await loadAvailableDays();
+        await loadEntries();
+      }
     }
 
     const POLL_INTERVAL_MS = 5000;
@@ -565,38 +682,49 @@
       }
 
       postBtn.disabled = true;
+      const { lat, lng } = myMarker.getLatLng();
+      const entry = { label, lat, lng, timestamp: new Date().toISOString() };
 
       try {
-        const { lat, lng } = myMarker.getLatLng();
-
-        const res = await fetch("/location/set", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ label, lat, lng })
-        });
-        if (!res.ok) throw new Error("request failed");
-
-        map.setView([lat, lng], 15);
-        myMarker.openPopup();
-        focusSelect.value = "";
-        showStatus("Position gepostet.", false);
-
-        // A post always happens "now" — jump the view back to today so the
-        // just-posted pin is actually visible, even if the user had a past
-        // day selected (e.g. after browsing history, then posting).
-        const today = todayBerlinDateStr();
-        if (selectedDate !== today) {
-          selectedDate = today;
-          startPolling();
-        }
-        await loadAvailableDays();
-        await loadEntries();
+        await sendPosition(entry);
+        await onPositionAccepted(lat, lng, false);
       } catch (err) {
-        showStatus("Position konnte nicht gepostet werden.", true);
+        if (isNetworkError(err)) {
+          // No connection right now (dead zone) — keep the position locally
+          // and send it automatically once we're back online, instead of
+          // just reporting failure and losing the click.
+          queuePost(entry);
+          await onPositionAccepted(lat, lng, true);
+        } else {
+          showStatus("Position konnte nicht gepostet werden.", true);
+        }
       } finally {
         postBtn.disabled = false;
       }
     });
+
+    async function onPositionAccepted(lat, lng, queued) {
+      map.setView([lat, lng], 15);
+      myMarker.openPopup();
+      focusSelect.value = "";
+      showStatus(
+        queued
+          ? "Kein Netz — Position wird automatisch gesendet, sobald wieder Verbindung da ist."
+          : "Position gepostet.",
+        false
+      );
+
+      // A post always happens "now" — jump the view back to today so the
+      // just-posted pin is actually visible, even if the user had a past
+      // day selected (e.g. after browsing history, then posting).
+      const today = todayBerlinDateStr();
+      if (selectedDate !== today) {
+        selectedDate = today;
+        startPolling();
+      }
+      await loadAvailableDays();
+      await loadEntries();
+    }
 
     recenterBtn.addEventListener("click", async () => {
       recenterBtn.disabled = true;
@@ -614,7 +742,16 @@
       }
     });
 
+    // Retry queued posts on both signals: the 'online' event fires promptly
+    // but only reflects the network interface, not actual reachability
+    // (e.g. Wi-Fi connected, no real internet) — the interval timer is the
+    // fallback that eventually catches those cases too.
+    const QUEUE_RETRY_MS = 20000;
+    window.addEventListener("online", flushQueue);
+    setInterval(flushQueue, QUEUE_RETRY_MS);
+
     async function init() {
+      updateQueueHint();
       await loadAvailableDays();
       const [posResult] = await Promise.allSettled([getFreshPosition(), loadEntries()]);
       if (posResult.status === "fulfilled") {
@@ -625,6 +762,7 @@
         showStatus("Standortzugriff nicht möglich – bitte Berechtigung erteilen.", true);
       }
       startPolling();
+      flushQueue();
     }
 
     init();
