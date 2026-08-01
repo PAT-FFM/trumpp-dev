@@ -138,6 +138,24 @@
       cursor: default;
     }
 
+    .btn-secondary {
+      width: 100%;
+      margin-top: 0.75rem;
+      background: #eee;
+      color: #222;
+      font-weight: 600;
+    }
+
+    .btn-secondary:disabled {
+      color: #999;
+      cursor: default;
+    }
+
+    input:disabled {
+      background: #f2f2f2;
+      color: #999;
+    }
+
     .my-marker-icon svg {
       display: block;
       filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
@@ -217,6 +235,8 @@
     <p class="hint">Unter diesem Label wird die Position des blauen Pins gespeichert. Du kannst den Pin auf der Karte verschieben.</p>
     <button id="postBtn">Position posten</button>
     <button id="recenterBtn" type="button" class="link-btn">Standort neu ermitteln</button>
+    <button id="tourBtn" type="button" class="btn-secondary">Tour starten</button>
+    <p class="hint" id="tourStatus" hidden></p>
 
     <div class="focus-row" id="focusRow" hidden>
       <select id="focusSelect">
@@ -261,6 +281,16 @@
     // placement isn't immediately overwritten by the next GPS fix.
     // Re-enabled by "Standort neu ermitteln".
     let followMode = true;
+
+    // Last known real GPS fix, independent of myMarker (which can be
+    // manually dragged) — the auto-tour feature posts from this.
+    let lastGpsFix = null;
+
+    let autoTourTimer = null;
+    let autoTourLabel = null;
+    let autoTourStartedAt = null;
+    let autoTourCount = 0;
+    let autoPostInFlight = false;
 
     // Nearby DB pins collapse into a single neutral cluster icon (plain
     // black circle with a count) so a spot with several stacked pins isn't
@@ -346,6 +376,8 @@
     const dateSelect = document.getElementById("dateSelect");
     const staleHint = document.getElementById("staleHint");
     const queueHint = document.getElementById("queueHint");
+    const tourBtn = document.getElementById("tourBtn");
+    const tourStatus = document.getElementById("tourStatus");
 
     // Aborts a fetch after timeoutMs — on flaky mobile signal a request can
     // otherwise hang far longer than a genuine dead zone would need to fail,
@@ -435,6 +467,11 @@
       if (!navigator.geolocation) return;
       navigator.geolocation.watchPosition(
         (pos) => {
+          // Tracked unconditionally, independent of followMode — the
+          // auto-tour feature posts from this, not from myMarker, so
+          // dragging the pin (e.g. to mark a rest stop) never freezes the
+          // tour's trail at the dragged spot.
+          lastGpsFix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           if (!followMode) return;
           const { latitude, longitude } = pos.coords;
           updateMyMarker(latitude, longitude);
@@ -800,12 +837,19 @@
       myMarker.openPopup();
       focusSelect.value = "";
       showStatus("Position gepostet.", false);
+      await refreshAfterPost();
+    }
 
-      // A post always happens "now" — jump the view to today so the
-      // just-posted pin is actually visible, even if the user had a past
-      // day selected. If today's data can't actually be loaded right now
-      // (dead zone), loadEntries() falls selectedDate back to whatever day
-      // is genuinely on screen — polling is decided after that, not before.
+    // Shared by manual posts and auto-tour ticks — the latter skip the
+    // map/popup/status parts above, no reason to yank the view or spam the
+    // status line every 2 minutes.
+    //
+    // A post always happens "now" — jump the view to today so the
+    // just-posted pin is actually visible, even if the user had a past day
+    // selected. If today's data can't actually be loaded right now (dead
+    // zone), loadEntries() falls selectedDate back to whatever day is
+    // genuinely on screen — polling is decided after that, not before.
+    async function refreshAfterPost() {
       selectedDate = todayBerlinDateStr();
       await loadAvailableDays();
       await loadEntries();
@@ -822,6 +866,7 @@
       try {
         const pos = await getFreshPosition();
         const { latitude, longitude } = pos.coords;
+        lastGpsFix = { lat: latitude, lng: longitude };
         followMode = true;
         updateMyMarker(latitude, longitude);
         map.setView([latitude, longitude], 15);
@@ -831,6 +876,123 @@
       } finally {
         recenterBtn.disabled = false;
       }
+    });
+
+    // Auto-tour ("Tour starten"/"Tour beenden"): posts the current position
+    // on a fixed interval instead of requiring a manual click every time —
+    // for a ride/hike where posting by hand every couple minutes isn't
+    // practical. State is mirrored into localStorage so an active tour
+    // survives the browser/OS killing the background tab (see
+    // "Connectivity resilience" in CLAUDE.md) — on the next load, init()
+    // below picks it back up automatically instead of the trail just
+    // silently stopping until someone notices.
+    const AUTO_TOUR_INTERVAL_MS = 2 * 60 * 1000;
+    const TOUR_KEY = "location_active_tour";
+
+    function saveTourState() {
+      localStorage.setItem(TOUR_KEY, JSON.stringify({
+        label: autoTourLabel,
+        startedAt: autoTourStartedAt.toISOString(),
+        count: autoTourCount
+      }));
+    }
+
+    function loadTourState() {
+      try {
+        return JSON.parse(localStorage.getItem(TOUR_KEY));
+      } catch {
+        return null;
+      }
+    }
+
+    function clearTourState() {
+      localStorage.removeItem(TOUR_KEY);
+    }
+
+    function updateTourStatus() {
+      tourStatus.hidden = false;
+      tourStatus.textContent =
+        `Tour "${autoTourLabel}" läuft seit ${formatTime(autoTourStartedAt.toISOString())} — ` +
+        `${autoTourCount} Position${autoTourCount === 1 ? "" : "en"} gepostet.`;
+    }
+
+    // Posts from lastGpsFix, not myMarker — myMarker can be manually
+    // dragged (e.g. to mark a rest stop) without that freezing the tour's
+    // trail at the dragged spot. autoPostInFlight guards against setInterval
+    // firing a new tick before a slow previous one (flaky signal) finished —
+    // otherwise two overlapping ticks could double-count or double-save.
+    async function performAutoPost() {
+      if (autoPostInFlight || !lastGpsFix) return;
+      autoPostInFlight = true;
+      try {
+        const entry = {
+          label: autoTourLabel,
+          lat: lastGpsFix.lat,
+          lng: lastGpsFix.lng,
+          timestamp: new Date().toISOString()
+        };
+        try {
+          await sendPosition(entry);
+        } catch (err) {
+          if (isNetworkError(err)) {
+            await queuePost(entry);
+          } else {
+            return; // real server error — skip this tick, next one retries with a fresh timestamp
+          }
+        }
+        autoTourCount++;
+        saveTourState();
+        updateTourStatus();
+        await refreshAfterPost();
+      } finally {
+        autoPostInFlight = false;
+      }
+    }
+
+    async function beginAutoTour(label, startedAt, count) {
+      autoTourLabel = label;
+      autoTourStartedAt = startedAt;
+      autoTourCount = count;
+      labelInput.value = label;
+      labelInput.disabled = true;
+      tourBtn.textContent = "Tour beenden";
+      saveTourState();
+      updateTourStatus();
+      await performAutoPost();
+      autoTourTimer = setInterval(performAutoPost, AUTO_TOUR_INTERVAL_MS);
+    }
+
+    async function endAutoTour() {
+      clearInterval(autoTourTimer);
+      autoTourTimer = null;
+      tourBtn.disabled = true;
+      await performAutoPost(); // final pin at the actual stop location
+      clearTourState();
+      labelInput.disabled = false;
+      tourBtn.textContent = "Tour starten";
+      tourBtn.disabled = false;
+      tourStatus.hidden = true;
+      autoTourLabel = null;
+      autoTourStartedAt = null;
+      autoTourCount = 0;
+    }
+
+    tourBtn.addEventListener("click", async () => {
+      if (autoTourTimer) {
+        await endAutoTour();
+        return;
+      }
+      const label = labelInput.value.trim();
+      if (!label) {
+        showStatus("Bitte Label eingeben.", true);
+        labelInput.focus();
+        return;
+      }
+      if (!lastGpsFix) {
+        showStatus("Position noch nicht ermittelt.", true);
+        return;
+      }
+      await beginAutoTour(label, new Date(), 0);
     });
 
     // Retry on both signals: the 'online' event fires promptly but only
@@ -847,6 +1009,7 @@
       const [posResult] = await Promise.allSettled([getFreshPosition(), loadEntries()]);
       if (posResult.status === "fulfilled") {
         const { latitude, longitude } = posResult.value.coords;
+        lastGpsFix = { lat: latitude, lng: longitude };
         map.setView([latitude, longitude], 15);
         updateMyMarker(latitude, longitude);
       } else {
@@ -855,6 +1018,13 @@
       startPolling();
       startWatchingPosition();
       flushQueue();
+
+      // Resume a tour that was still running when the tab got killed —
+      // otherwise the trail just silently stops until someone notices.
+      const savedTour = loadTourState();
+      if (savedTour && savedTour.label) {
+        await beginAutoTour(savedTour.label, new Date(savedTour.startedAt), savedTour.count);
+      }
     }
 
     init();

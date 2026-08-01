@@ -258,6 +258,28 @@ separate document).
     dragging it may not be. A separate "Refresh location" link re-fetches a
     fresh GPS position and resets the pin there. Helper text directly under
     the label field explains the link between pin and label.
+  - **Auto-tour ("Tour starten"/"Tour beenden"):** posts the current
+    position automatically every 2 minutes (fixed, not configurable —
+    "keep it simple") instead of requiring a manual click each time, for a
+    ride/hike. Still strictly foreground: it's a plain `setInterval`,
+    tied to the page staying open — this does **not** reopen the
+    "no background tracking" scope decision below, it just automates the
+    click itself. Posts from `lastGpsFix` (the raw last GPS fix, tracked
+    unconditionally regardless of follow mode) rather than from `myMarker`,
+    so dragging the pin mid-tour (e.g. to mark a rest stop) can't freeze
+    the trail at the dragged spot. The label field locks for the duration
+    (prevents a trail accidentally fragmenting across labels) and
+    re-enables on stop; stopping also posts one final pin at the actual
+    stop location rather than leaving the trail up to 2 minutes short.
+    Tour state (`label`, `startedAt`, running post count) mirrors into
+    `localStorage` (`location_active_tour`) — `init()` checks for it on
+    load and auto-resumes, so a tab-kill-and-reload (see "Connectivity
+    resilience") doesn't silently end the tour; only an explicit "Tour
+    beenden" does. Reuses the same `sendPosition`/queue path as a manual
+    post, so a tick that hits a dead zone queues exactly like one would.
+    An `autoPostInFlight` guard skips a tick if the previous one (e.g. slow
+    network) hasn't finished yet — same overlapping-timer risk as the
+    queue-duplicate bug already fixed elsewhere in this section.
   - Focus row (only shown if the selected day has DB entries): dropdown
     with existing labels, deduplicated to one entry per label (on
     change: map pans/zooms to that label's *newest* pin, other pins stay
