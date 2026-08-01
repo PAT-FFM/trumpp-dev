@@ -613,11 +613,31 @@
         : `${count} Positionen warten auf Verbindung und werden automatisch gesendet.`;
     }
 
+    // Serializes every read-modify-write on the queue (queuePost and
+    // flushQueue below) so they can never interleave — without this, two
+    // overlapping flushQueue() runs (e.g. the 'online' event and the 20s
+    // timer firing close together, or a slow flush still in flight when
+    // the next tick starts) would both read the same pending entry and
+    // both send it, producing duplicate DB rows with identical lat/lng and
+    // timestamp; or a queuePost() landing mid-flush could get silently
+    // overwritten away by the flush's stale save. Plain promise chaining
+    // is enough here — JS is single-threaded, the only reason these can
+    // interleave at all is the awaits inside flushQueue.
+    let queueLock = Promise.resolve();
+
+    function withQueueLock(task) {
+      const run = queueLock.then(task, task);
+      queueLock = run.then(() => {}, () => {});
+      return run;
+    }
+
     function queuePost(entry) {
-      const list = loadPendingPosts();
-      list.push(entry);
-      savePendingPosts(list);
-      updateQueueHint();
+      return withQueueLock(() => {
+        const list = loadPendingPosts();
+        list.push(entry);
+        savePendingPosts(list);
+        updateQueueHint();
+      });
     }
 
     // timestamp is captured client-side at the moment of the click (the
@@ -637,20 +657,22 @@
     // Retries queued posts oldest-first, stopping at the first one that
     // still fails — if we're still offline, there's no point burning
     // requests on the rest; they'll be retried on the next tick.
-    async function flushQueue() {
-      const list = loadPendingPosts();
-      if (list.length === 0) return;
+    function flushQueue() {
+      return withQueueLock(async () => {
+        const list = loadPendingPosts();
+        if (list.length === 0) return;
 
-      while (list.length > 0) {
-        try {
-          await sendPosition(list[0]);
-          list.shift();
-        } catch {
-          break;
+        while (list.length > 0) {
+          try {
+            await sendPosition(list[0]);
+            list.shift();
+          } catch {
+            break;
+          }
         }
-      }
-      savePendingPosts(list);
-      updateQueueHint();
+        savePendingPosts(list);
+        updateQueueHint();
+      });
     }
 
     // Runs on the 'online' event and on a periodic timer — both the queue
@@ -763,7 +785,7 @@
           // "still waiting for a connection" — #status just confirms the
           // click was accepted, same as the immediate-success case, so the
           // two don't end up saying overlapping things.
-          queuePost(entry);
+          await queuePost(entry);
           await onPositionAccepted(lat, lng);
         } else {
           showStatus("Position konnte nicht gepostet werden.", true);

@@ -329,7 +329,13 @@ while briefly unreachable."
   reachability, so the interval is the real fallback). `localStorage`, not
   IndexedDB — a handful of small JSON records don't need the extra
   complexity, and it survives a reload while still offline. A small hint in
-  the panel shows the pending count.
+  the panel shows the pending count. All reads/writes of the queue
+  (`queuePost`, `flushQueue`) go through a `withQueueLock` promise-chain
+  mutex — without it, two overlapping `flushQueue()` runs (e.g. the
+  `online` event and the 20s timer firing close together) would both read
+  the same pending entry and both send it, producing duplicate DB rows with
+  identical lat/lng and timestamp; discovered from real duplicates in
+  Supabase, not hypothetical.
 - **Client-captured timestamp:** a queued post carries the timestamp from
   the moment of the original click, not the moment it eventually reaches the
   server — otherwise a position captured in a dead zone at 14:00 but sent at
