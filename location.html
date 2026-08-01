@@ -709,6 +709,11 @@
       if (!label) return;
       const marker = latestMarkerByLabel[label];
       if (marker) {
+        // Otherwise the next watchPosition update pans right back to your
+        // own position a moment later, undoing the framing this just set —
+        // same "explicit manual navigation overrides auto-follow" rule as
+        // dragging the pin. Resume via "Standort neu ermitteln".
+        followMode = false;
         collapsePanel();
         // zoomToShowLayer (statt setView) zoomt genau so weit rein, bis der
         // Marker aus seinem Cluster "herausfällt" — ein festes Zoom-Level
@@ -723,6 +728,8 @@
       const layers = allDbMarkers.slice();
       if (myMarker) layers.push(myMarker);
       if (layers.length > 0) {
+        // See focusSelect's "change" handler above — same reasoning.
+        followMode = false;
         collapsePanel();
         map.fitBounds(L.featureGroup(layers).getBounds().pad(0.2));
       }

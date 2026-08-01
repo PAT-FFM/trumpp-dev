@@ -243,10 +243,13 @@ separate document).
     needed. Follow mode turns off the instant the pin is dragged (a
     `dragstart` listener, not `dragend` — must beat a GPS update landing
     mid-drag) so a manual correction isn't immediately overwritten by the
-    next fix; the map itself can still be freely panned/zoomed without
-    affecting it. Re-enabled by "Standort neu ermitteln", which is now both
-    "fetch a fresh fix" and "resume following". Watch errors (brief signal
-    loss while moving) are silently ignored — same "don't interrupt for
+    next fix, and likewise whenever "fokussieren" or "Show all pins" sets a
+    deliberate framing — without this a GPS update a moment later would pan
+    straight back to your own position and undo it. The map itself can
+    still be freely panned/zoomed without affecting follow mode. Re-enabled
+    by "Standort neu ermitteln", which is now both "fetch a fresh fix" and
+    "resume following". Watch errors (brief signal loss while moving) are
+    silently ignored — same "don't interrupt for
     something transient" reasoning as elsewhere in this feature.
   - Required label field + "Post position" button: posts whichever
     coordinates the "You" pin currently shows (GPS or manually dragged), not
