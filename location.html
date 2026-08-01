@@ -478,6 +478,13 @@
     // "no connection" — null until the first successful load ever happens.
     let lastSyncAt = null;
 
+    // The day whose entries are actually rendered on the map right now —
+    // distinct from selectedDate, which is just what the dropdown asks for.
+    // They can diverge when a day switch fails (dead zone): loadEntries()
+    // below falls selectedDate back to this so the dropdown never claims to
+    // show a day the map doesn't.
+    let loadedDate = selectedDate;
+
     function markSyncOk() {
       lastSyncAt = new Date();
       staleHint.hidden = true;
@@ -491,17 +498,23 @@
     }
 
     async function loadEntries() {
+      const requestedDate = selectedDate;
       try {
-        const res = await fetchWithTimeout(`/location/all?date=${encodeURIComponent(selectedDate)}`);
+        const res = await fetchWithTimeout(`/location/all?date=${encodeURIComponent(requestedDate)}`);
         if (!res.ok) throw new Error("request failed");
         const entries = await res.json();
         renderDbMarkers(entries);
         renderFocusRow(entries);
+        loadedDate = requestedDate;
         markSyncOk();
       } catch {
         // own position still works without DB pins — just flag that what's
         // shown may be outdated instead of silently pretending it's current
         markSyncFailed();
+        if (selectedDate !== loadedDate) {
+          selectedDate = loadedDate;
+          dateSelect.value = loadedDate;
+        }
       }
     }
 
@@ -588,23 +601,26 @@
       const list = loadPendingPosts();
       if (list.length === 0) return;
 
-      let progressed = false;
       while (list.length > 0) {
         try {
           await sendPosition(list[0]);
           list.shift();
-          progressed = true;
         } catch {
           break;
         }
       }
       savePendingPosts(list);
       updateQueueHint();
+    }
 
-      if (progressed) {
-        await loadAvailableDays();
-        await loadEntries();
-      }
+    // Runs on the 'online' event and on a periodic timer — both the queue
+    // and the two hints (stale-data, pending-count) should clear themselves
+    // the moment connectivity is back, without needing a day switch or the
+    // 5s poll (which only runs while viewing today) to happen to notice.
+    async function reconcileConnectivity() {
+      await flushQueue();
+      await loadAvailableDays();
+      await loadEntries();
     }
 
     const POLL_INTERVAL_MS = 5000;
@@ -634,10 +650,13 @@
       }
     });
 
-    dateSelect.addEventListener("change", () => {
+    dateSelect.addEventListener("change", async () => {
       selectedDate = dateSelect.value;
       focusSelect.value = "";
-      loadEntries();
+      // loadEntries() may revert selectedDate (and dateSelect.value) back to
+      // loadedDate on failure — the polling decision below has to look at
+      // selectedDate *after* that possible revert, not the just-requested one.
+      await loadEntries();
       if (selectedDate === todayBerlinDateStr()) {
         startPolling();
       } else {
@@ -714,16 +733,19 @@
         false
       );
 
-      // A post always happens "now" — jump the view back to today so the
+      // A post always happens "now" — jump the view to today so the
       // just-posted pin is actually visible, even if the user had a past
-      // day selected (e.g. after browsing history, then posting).
-      const today = todayBerlinDateStr();
-      if (selectedDate !== today) {
-        selectedDate = today;
-        startPolling();
-      }
+      // day selected. If today's data can't actually be loaded right now
+      // (dead zone), loadEntries() falls selectedDate back to whatever day
+      // is genuinely on screen — polling is decided after that, not before.
+      selectedDate = todayBerlinDateStr();
       await loadAvailableDays();
       await loadEntries();
+      if (selectedDate === todayBerlinDateStr()) {
+        startPolling();
+      } else {
+        stopPolling();
+      }
     }
 
     recenterBtn.addEventListener("click", async () => {
@@ -742,13 +764,13 @@
       }
     });
 
-    // Retry queued posts on both signals: the 'online' event fires promptly
-    // but only reflects the network interface, not actual reachability
-    // (e.g. Wi-Fi connected, no real internet) — the interval timer is the
-    // fallback that eventually catches those cases too.
+    // Retry on both signals: the 'online' event fires promptly but only
+    // reflects the network interface, not actual reachability (e.g. Wi-Fi
+    // connected, no real internet) — the interval timer is the fallback
+    // that eventually catches those cases too.
     const QUEUE_RETRY_MS = 20000;
-    window.addEventListener("online", flushQueue);
-    setInterval(flushQueue, QUEUE_RETRY_MS);
+    window.addEventListener("online", reconcileConnectivity);
+    setInterval(reconcileConnectivity, QUEUE_RETRY_MS);
 
     async function init() {
       updateQueueHint();

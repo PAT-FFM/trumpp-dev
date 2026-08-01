@@ -331,6 +331,16 @@ while briefly unreachable."
   what's on screen is current. All three GET/POST requests go through an
   8s-timeout fetch wrapper so a hanging request (flaky signal, not a clean
   failure) is treated as offline promptly rather than stalling the UI.
+- **Self-clearing hints:** both the stale-data hint and the pending-post
+  count clear themselves the moment connectivity returns, via a
+  `reconcileConnectivity()` run on the `online` event and on the same 20s
+  interval — not just via the 5s poll, which only runs while viewing today,
+  so a dead zone hit while looking at a past day still recovers on its own.
+- **Day-switch-during-outage guard:** switching the day dropdown while
+  offline attempts the load like normal, but if it fails, `selectedDate` (and
+  the dropdown itself) falls back to whichever day's entries are actually
+  still rendered on the map (`loadedDate` in `location.html`) — otherwise the
+  dropdown could claim to show a day the map isn't actually displaying.
 - Explicitly **not** attempted: caching map tiles or DB pins for full
   offline viewing (PWA/service worker) — out of scope, this only covers
   posting through a temporary dead zone while the page stays open.
