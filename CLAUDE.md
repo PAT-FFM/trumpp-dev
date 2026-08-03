@@ -280,32 +280,6 @@ separate document).
     An `autoPostInFlight` guard skips a tick if the previous one (e.g. slow
     network) hasn't finished yet — same overlapping-timer risk as the
     queue-duplicate bug already fixed elsewhere in this section.
-
-    **Real-world testing finding (2026-08):** on Android, once the screen
-    turns off (e.g. phone in a pocket), JS timers and `watchPosition`
-    effectively stop — nothing is tracked at all until the phone is next
-    unlocked, and the first tick after unlocking reposted stale
-    pre-sleep coordinates because `watchPosition` hadn't produced a fresh
-    fix yet. Two mitigations, both experimental (not verified to actually
-    solve the problem in the field yet):
-    - **Screen Wake Lock:** `requestWakeLock()`/`releaseWakeLock()` hold a
-      `navigator.wakeLock` `"screen"` lock for the duration of a tour,
-      preventing the automatic screen-off timeout so the page keeps
-      running. Re-requested on `visibilitychange` (the lock is
-      auto-released whenever the document goes hidden, so it needs to be
-      re-acquired every time the screen comes back). Does **not** survive
-      a manual power-button press — the OS always honors that — and costs
-      battery since the screen stays lit in the pocket. Unsupported
-      browsers silently no-op.
-    - **Stale-fix guard:** `performAutoPost()` now checks `lastGpsFixAt`
-      and, if the last fix is older than half the tour interval, forces a
-      one-shot `getFreshPosition()` before posting, instead of trusting a
-      `lastGpsFix` that may predate a screen lock/sleep.
-    If a further real-world test still shows the tour going dark whenever
-    the phone screen locks, the fallback plan discussed with Peter is to
-    rip auto-tour out entirely and go back to purely manual "Position
-    posten" clicks — the feature is worthless if it silently produces
-    gaps or duplicate/stale pins during actual use.
   - Focus row (only shown if the selected day has DB entries): dropdown
     with existing labels, deduplicated to one entry per label (on
     change: map pans/zooms to that label's *newest* pin, other pins stay

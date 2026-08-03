@@ -284,18 +284,13 @@
 
     // Last known real GPS fix, independent of myMarker (which can be
     // manually dragged) — the auto-tour feature posts from this.
-    // lastGpsFixAt tracks how old that fix is — see performAutoPost's
-    // staleness check, which forces a fresh one-shot fix instead of
-    // reposting a fix from before the phone locked/slept.
     let lastGpsFix = null;
-    let lastGpsFixAt = null;
 
     let autoTourTimer = null;
     let autoTourLabel = null;
     let autoTourStartedAt = null;
     let autoTourCount = 0;
     let autoPostInFlight = false;
-    let wakeLock = null;
 
     // Nearby DB pins collapse into a single neutral cluster icon (plain
     // black circle with a count) so a spot with several stacked pins isn't
@@ -477,7 +472,6 @@
           // dragging the pin (e.g. to mark a rest stop) never freezes the
           // tour's trail at the dragged spot.
           lastGpsFix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          lastGpsFixAt = Date.now();
           if (!followMode) return;
           const { latitude, longitude } = pos.coords;
           updateMyMarker(latitude, longitude);
@@ -873,7 +867,6 @@
         const pos = await getFreshPosition();
         const { latitude, longitude } = pos.coords;
         lastGpsFix = { lat: latitude, lng: longitude };
-        lastGpsFixAt = Date.now();
         followMode = true;
         updateMyMarker(latitude, longitude);
         map.setView([latitude, longitude], 15);
@@ -895,45 +888,6 @@
     // silently stopping until someone notices.
     const AUTO_TOUR_INTERVAL_MS = 2 * 60 * 1000;
     const TOUR_KEY = "location_active_tour";
-
-    // Screen Wake Lock — experimental attempt to keep the page actually
-    // running for the duration of a tour. Real-world testing showed that
-    // once Android turns the screen off (e.g. phone in a pocket), JS timers
-    // and watchPosition effectively stop, so nothing gets tracked at all
-    // until the phone is next unlocked. A wake lock prevents the automatic
-    // screen-off timeout for as long as it's held, which keeps the page
-    // visible/running instead. It does NOT survive a manual power-button
-    // press (that's a deliberate user action the OS always honors), and it
-    // costs battery since the screen physically stays lit in the pocket —
-    // acceptable trade-off to test, not a guaranteed fix. Support is also
-    // not universal (mainly Chromium-based browsers) — failure is silently
-    // ignored, same as geolocation errors elsewhere on this page.
-    async function requestWakeLock() {
-      if (!("wakeLock" in navigator)) return;
-      try {
-        wakeLock = await navigator.wakeLock.request("screen");
-        wakeLock.addEventListener("release", () => { wakeLock = null; });
-      } catch {
-        wakeLock = null;
-      }
-    }
-
-    function releaseWakeLock() {
-      if (wakeLock) {
-        wakeLock.release().catch(() => {});
-        wakeLock = null;
-      }
-    }
-
-    // The wake lock is auto-released by the browser whenever the document
-    // becomes hidden (screen off, app switched away) — there's no way to
-    // prevent that release itself. What we can do is re-request it the
-    // moment the page becomes visible again, so a tour resumes holding the
-    // lock rather than silently running unprotected after the first
-    // lock/unlock cycle.
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && autoTourTimer) requestWakeLock();
-    });
 
     function saveTourState() {
       localStorage.setItem(TOUR_KEY, JSON.stringify({
@@ -959,8 +913,7 @@
       tourStatus.hidden = false;
       tourStatus.textContent =
         `Tour "${autoTourLabel}" läuft seit ${formatTime(autoTourStartedAt.toISOString())} — ` +
-        `${autoTourCount} Position${autoTourCount === 1 ? "" : "en"} gepostet. ` +
-        `Bildschirm bleibt dafür an (Akku!) — bitte nicht manuell sperren.`;
+        `${autoTourCount} Position${autoTourCount === 1 ? "" : "en"} gepostet.`;
     }
 
     // Posts from lastGpsFix, not myMarker — myMarker can be manually
@@ -968,28 +921,10 @@
     // trail at the dragged spot. autoPostInFlight guards against setInterval
     // firing a new tick before a slow previous one (flaky signal) finished —
     // otherwise two overlapping ticks could double-count or double-save.
-    // If watchPosition hasn't produced a fix more recent than half the tour
-    // interval, lastGpsFix is likely stale from before a screen lock/sleep
-    // (observed in real testing: the tick right after unlocking posted the
-    // same coordinates as before the phone went to sleep). Force a one-shot
-    // fresh fix in that case rather than trusting the stale value.
-    const STALE_FIX_THRESHOLD_MS = AUTO_TOUR_INTERVAL_MS / 2;
-
     async function performAutoPost() {
-      if (autoPostInFlight) return;
+      if (autoPostInFlight || !lastGpsFix) return;
       autoPostInFlight = true;
       try {
-        if (!lastGpsFix || Date.now() - lastGpsFixAt > STALE_FIX_THRESHOLD_MS) {
-          try {
-            const pos = await getFreshPosition();
-            lastGpsFix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            lastGpsFixAt = Date.now();
-          } catch {
-            // no fresh fix available (e.g. still reacquiring GPS) — fall
-            // back to whatever lastGpsFix already holds, if anything
-          }
-        }
-        if (!lastGpsFix) return;
         const entry = {
           label: autoTourLabel,
           lat: lastGpsFix.lat,
@@ -1015,12 +950,6 @@
     }
 
     async function beginAutoTour(label, startedAt, count) {
-      // Clears a lingering "Bitte Label eingeben." from a first click
-      // without a label — tourStatus (below) takes over as the ongoing
-      // status display once the tour is running, so #status shouldn't
-      // still be showing a stale warning next to it.
-      statusEl.textContent = "";
-      statusEl.className = "";
       autoTourLabel = label;
       autoTourStartedAt = startedAt;
       autoTourCount = count;
@@ -1029,7 +958,6 @@
       tourBtn.textContent = "Tour beenden";
       saveTourState();
       updateTourStatus();
-      await requestWakeLock();
       await performAutoPost();
       autoTourTimer = setInterval(performAutoPost, AUTO_TOUR_INTERVAL_MS);
     }
@@ -1039,7 +967,6 @@
       autoTourTimer = null;
       tourBtn.disabled = true;
       await performAutoPost(); // final pin at the actual stop location
-      releaseWakeLock();
       clearTourState();
       labelInput.disabled = false;
       tourBtn.textContent = "Tour starten";
@@ -1083,7 +1010,6 @@
       if (posResult.status === "fulfilled") {
         const { latitude, longitude } = posResult.value.coords;
         lastGpsFix = { lat: latitude, lng: longitude };
-        lastGpsFixAt = Date.now();
         map.setView([latitude, longitude], 15);
         updateMyMarker(latitude, longitude);
       } else {
