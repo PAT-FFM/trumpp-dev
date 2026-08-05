@@ -406,11 +406,11 @@ with the service role key.
 Two DB triggers, both `after insert ... for each row` (so they only fire on
 genuine new rows, matching the plain-insert model above):
 - `trg_limit_locations` (function `limit_locations_table()`): caps the
-  **whole table at 500 rows total** — on insert, deletes rows beyond the
-  500 most recent (by `timestamp`, `id` as tiebreak), regardless of
+  **whole table at 5000 rows total** — on insert, deletes rows beyond the
+  5000 most recent (by `timestamp`, `id` as tiebreak), regardless of
   label.
 - `trg_limit_locations_per_label` (function
-  `limit_locations_per_label()`): caps **each label at 50 rows** —
+  `limit_locations_per_label()`): caps **each label at 500 rows** —
   same eviction logic, scoped to `label = new.label`.
 
 Both guard against a spam script flooding the table, either with many

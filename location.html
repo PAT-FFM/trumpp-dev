@@ -212,11 +212,13 @@
     </div>
     <p class="hint" id="staleHint" hidden></p>
 
-    <label for="label">Label*</label>
-    <input type="text" id="label" placeholder="z.B. Tucan123" maxlength="64" autocomplete="off">
-    <p class="hint">Unter diesem Label wird die Position des blauen Pins gespeichert. Du kannst den Pin auf der Karte verschieben.</p>
-    <button id="postBtn">Position posten</button>
-    <button id="recenterBtn" type="button" class="link-btn">Standort neu ermitteln</button>
+    <div id="postForm">
+      <label for="label">Label*</label>
+      <input type="text" id="label" placeholder="z.B. Tucan123" maxlength="64" autocomplete="off">
+      <p class="hint">Unter diesem Label wird die Position des blauen Pins gespeichert. Du kannst den Pin auf der Karte verschieben.</p>
+      <button id="postBtn">Position posten</button>
+      <button id="recenterBtn" type="button" class="link-btn">Standort neu ermitteln</button>
+    </div>
 
     <div class="focus-row" id="focusRow" hidden>
       <select id="focusSelect">
@@ -334,6 +336,7 @@
     }
 
     const statusEl = document.getElementById("status");
+    const postForm = document.getElementById("postForm");
     const postBtn = document.getElementById("postBtn");
     const recenterBtn = document.getElementById("recenterBtn");
     const labelInput = document.getElementById("label");
@@ -712,13 +715,72 @@
       }
     });
 
+    // Shared by the "Alle Pins" button and enterViewMode() below — fitBounds
+    // over every currently loaded DB pin, plus your own position if it's
+    // actually shown on the map right now (it isn't while a past day is
+    // selected, see enterViewMode).
+    function fitAllPins() {
+      const layers = allDbMarkers.slice();
+      if (myMarker && map.hasLayer(myMarker)) layers.push(myMarker);
+      if (layers.length > 0) {
+        // Otherwise the next watchPosition update pans right back to your
+        // own position a moment later, undoing the framing this just set —
+        // same "explicit manual navigation overrides auto-follow" rule as
+        // dragging the pin.
+        followMode = false;
+        collapsePanel();
+        map.fitBounds(L.featureGroup(layers).getBounds().pad(0.2));
+      }
+    }
+
+    // View mode: a past day is selected. Posting doesn't make sense there —
+    // a post is always "now" and would jump straight back to today anyway
+    // (see onPositionAccepted) — so the post form and the "You" pin (whose
+    // only purpose is preparing/dragging a position to post) are hidden, and
+    // the map auto-frames the day's full pin history instead of tracking
+    // your own live position.
+    function enterViewMode() {
+      postForm.hidden = true;
+      followMode = false;
+      if (myMarker && map.hasLayer(myMarker)) {
+        map.removeLayer(myMarker);
+      }
+      fitAllPins();
+    }
+
+    // Live mode: "today" is selected — the normal posting/follow flow. The
+    // panel itself is left alone here: reaching this from view mode requires
+    // the panel to already be open (that's the only place the day dropdown
+    // lives), so there's nothing to expand.
+    function enterLiveMode() {
+      postForm.hidden = false;
+      followMode = true;
+      if (myMarker) {
+        if (!map.hasLayer(myMarker)) myMarker.addTo(map);
+        map.setView(myMarker.getLatLng(), 15);
+      }
+    }
+
+    function applyDateMode() {
+      if (selectedDate === todayBerlinDateStr()) {
+        enterLiveMode();
+      } else {
+        enterViewMode();
+      }
+    }
+
     dateSelect.addEventListener("change", async () => {
-      selectedDate = dateSelect.value;
+      const requestedDate = dateSelect.value;
+      selectedDate = requestedDate;
       focusSelect.value = "";
       // loadEntries() may revert selectedDate (and dateSelect.value) back to
-      // loadedDate on failure — the polling decision below has to look at
-      // selectedDate *after* that possible revert, not the just-requested one.
+      // loadedDate on failure — in that case the switch never actually
+      // happened, so applyDateMode() is skipped and everything (view/live
+      // mode, panel, pin-mode) stays exactly as it was before this change.
       await loadEntries();
+      if (selectedDate === requestedDate) {
+        applyDateMode();
+      }
       if (selectedDate === todayBerlinDateStr()) {
         startPolling();
       } else {
@@ -746,16 +808,7 @@
       }
     });
 
-    allBtn.addEventListener("click", () => {
-      const layers = allDbMarkers.slice();
-      if (myMarker) layers.push(myMarker);
-      if (layers.length > 0) {
-        // See focusSelect's "change" handler above — same reasoning.
-        followMode = false;
-        collapsePanel();
-        map.fitBounds(L.featureGroup(layers).getBounds().pad(0.2));
-      }
-    });
+    allBtn.addEventListener("click", fitAllPins);
 
     postBtn.addEventListener("click", async () => {
       const label = labelInput.value.trim();
