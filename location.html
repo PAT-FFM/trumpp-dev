@@ -415,6 +415,22 @@
       });
     }
 
+    // Maps a GeolocationPositionError's numeric code to a status-line message
+    // specific enough to act on — "bitte Berechtigung erteilen" only applies
+    // to code 1 (PERMISSION_DENIED); showing that same text for code 2/3
+    // (no permission problem at all) misleads into chasing a nonexistent
+    // permission prompt. This is also the only place a real-device failure
+    // is visible without opening devtools, so it needs to carry the actual
+    // reason rather than a generic fallback.
+    function geolocationErrorMessage(err) {
+      switch (err && err.code) {
+        case 1: return "Standortzugriff nicht möglich – bitte Berechtigung erteilen.";
+        case 2: return "Standort konnte nicht ermittelt werden (Position aktuell nicht verfügbar).";
+        case 3: return "Standort konnte nicht ermittelt werden (Zeitüberschreitung).";
+        default: return "Standort konnte nicht ermittelt werden.";
+      }
+    }
+
     function getFreshPosition() {
       return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
@@ -879,8 +895,8 @@
         updateMyMarker(latitude, longitude);
         map.setView([latitude, longitude], 15);
         showStatus("Standort aktualisiert.", false);
-      } catch {
-        showStatus("Standort konnte nicht ermittelt werden.", true);
+      } catch (err) {
+        showStatus(geolocationErrorMessage(err), true);
       } finally {
         recenterBtn.disabled = false;
       }
@@ -903,7 +919,7 @@
         map.setView([latitude, longitude], 15);
         updateMyMarker(latitude, longitude);
       } else {
-        showStatus("Standortzugriff nicht möglich – bitte Berechtigung erteilen.", true);
+        showStatus(geolocationErrorMessage(posResult.reason), true);
       }
       startPolling();
       startWatchingPosition();
