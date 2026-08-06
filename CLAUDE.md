@@ -284,6 +284,18 @@ separate document).
     button (fitBounds over every pin, not just the latest per label).
     Deliberately no "all" dropdown entry, since that's an action, not a
     selection.
+    - **Focus route line:** if the focused label has more than one pin on
+      the selected day, a polyline connects them oldest-to-newest (in the
+      label's own color) instead of just zooming to the newest pin —
+      covers a label used as a running trail rather than a single "I was
+      here" marker (e.g. a bike-ride tracker posting every 2 min, currently
+      an Android app posting straight to `POST /location/set`, not the web
+      form — see [[project_location_tracker_flutter_idea]] for background
+      on why a native app exists for that case at all). Framed with
+      `fitBounds` over the whole line rather than `zoomToShowLayer` on a
+      single marker. The line is redrawn (old one removed) on every
+      re-focus and cleared whenever entries reload (day switch, poll tick)
+      since it points at specific loaded pins.
   - The control panel is a bottom sheet (full-width on mobile, a small
     floating card on desktop) that visually covers a chunk of the map. Both
     "Show all pins" and focusing a label collapse it (animated slide to

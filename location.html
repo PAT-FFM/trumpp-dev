@@ -257,6 +257,19 @@
     let myMarker = null;
     let allDbMarkers = [];
     let latestMarkerByLabel = {};
+    // Full per-label history (all rows for the selected day, not just the
+    // newest), oldest-first — feeds the focus-route polyline below. Kept
+    // separate from allDbMarkers/latestMarkerByLabel since those are
+    // marker-shaped, not plain entry data.
+    let entriesByLabel = {};
+    // Same color a label's dots use, keyed by label — so the route line
+    // drawn when focusing a label matches its own pins instead of a fixed
+    // color. Reused (not recomputed) from renderDbMarkers' color pass.
+    let labelColorMap = {};
+    // The currently drawn focus-route line, if any — tracked so focusing a
+    // different label (or reloading entries) can remove the previous one
+    // instead of stacking lines on top of each other.
+    let focusPolyline = null;
 
     // While true, live GPS updates move the "You" marker and pan the map
     // to follow — off once the marker is dragged, or the map itself is
@@ -531,9 +544,17 @@
       dbMarkerCluster.clearLayers();
       allDbMarkers = [];
       latestMarkerByLabel = {};
-      const colorMap = assignColorsByFirstSeen(entries);
+      entriesByLabel = {};
+      // The old focus route (if any) refers to markers/entries that just
+      // got wiped above — drop it rather than leave a stale line pointing
+      // at data that's no longer on the map.
+      if (focusPolyline) {
+        map.removeLayer(focusPolyline);
+        focusPolyline = null;
+      }
+      labelColorMap = assignColorsByFirstSeen(entries);
       entries.forEach((entry) => {
-        const icon = getDbIcon(colorMap[entry.label]);
+        const icon = getDbIcon(labelColorMap[entry.label]);
         const marker = L.marker([entry.lat, entry.lng], { icon });
         marker.bindPopup(
           `<strong>${escapeHtml(entry.label)}</strong><br>${formatTime(entry.timestamp)}`
@@ -543,6 +564,7 @@
         if (!latestMarkerByLabel[entry.label]) {
           latestMarkerByLabel[entry.label] = marker;
         }
+        (entriesByLabel[entry.label] = entriesByLabel[entry.label] || []).push(entry);
       });
     }
 
@@ -859,13 +881,37 @@
         // dragging the pin. Resume via "Standort neu ermitteln".
         followMode = false;
         collapsePanel();
-        // zoomToShowLayer (statt setView) zoomt genau so weit rein, bis der
-        // Marker aus seinem Cluster "herausfällt" — ein festes Zoom-Level
-        // würde ihn sonst ggf. weiterhin geclustert lassen.
+
+        if (focusPolyline) {
+          map.removeLayer(focusPolyline);
+          focusPolyline = null;
+        }
+
+        // entriesByLabel is newest-first (same order as the loaded
+        // entries); a route line reads oldest-to-newest.
+        const routeEntries = (entriesByLabel[label] || []).slice().reverse();
+
         withFollowSuppressed(() => {
-          dbMarkerCluster.zoomToShowLayer(marker, () => {
+          if (routeEntries.length > 1) {
+            // A label with several pins on this day (e.g. a bike ride
+            // posting every 2 min from the Android app, not the web form)
+            // reads better as a connected route than as a pile of loose
+            // dots — draw the line and frame the whole thing, instead of
+            // zoomToShowLayer's "just the newest pin" behavior below.
+            focusPolyline = L.polyline(
+              routeEntries.map((e) => [e.lat, e.lng]),
+              { color: labelColorMap[label] || "#1976d2", weight: 3, opacity: 0.8 }
+            ).addTo(map);
+            map.fitBounds(focusPolyline.getBounds().pad(0.2));
             marker.openPopup();
-          });
+          } else {
+            // zoomToShowLayer (statt setView) zoomt genau so weit rein, bis
+            // der Marker aus seinem Cluster "herausfällt" — ein festes
+            // Zoom-Level würde ihn sonst ggf. weiterhin geclustert lassen.
+            dbMarkerCluster.zoomToShowLayer(marker, () => {
+              marker.openPopup();
+            });
+          }
         });
       }
     });
