@@ -293,9 +293,23 @@ separate document).
       form — see [[project_location_tracker_flutter_idea]] for background
       on why a native app exists for that case at all). Framed with
       `fitBounds` over the whole line rather than `zoomToShowLayer` on a
-      single marker. The line is redrawn (old one removed) on every
-      re-focus and cleared whenever entries reload (day switch, poll tick)
-      since it points at specific loaded pins.
+      single marker. `focusedLabel` tracks which label is focused
+      independently of `focusSelect.value` — `renderFocusRow()` rebuilds
+      the `<select>`'s `<option>`s on every entries reload, which resets
+      the browser's own selection; without a separate variable to restore
+      it from, the dropdown (and the route line) would silently blank a
+      few seconds into viewing it. Two independent things trigger a reload:
+      the 5s live poll (today only) and the 20s `reconcileConnectivity()`
+      interval below, which runs regardless of which day is selected — the
+      line going blank while viewing a *past* day can only be
+      `reconcileConnectivity()`, since the poll is off there. On every
+      reload, `updateFocusPolyline()` redraws the line from the fresh
+      entries for `focusedLabel` rather than just deleting it, and
+      deliberately does *not* re-run `fitBounds` — a reload redrawing the
+      line shouldn't also fight whatever pan/zoom the user has since set,
+      same "don't fight the user's current view" rule follow mode uses.
+      Manual (re-)focusing still fits the view to the freshly drawn
+      line, on top of calling the same function.
   - The control panel is a bottom sheet (full-width on mobile, a small
     floating card on desktop) that visually covers a chunk of the map. Both
     "Show all pins" and focusing a label collapse it (animated slide to

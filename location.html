@@ -258,14 +258,23 @@
     let allDbMarkers = [];
     let latestMarkerByLabel = {};
     // Full per-label history (all rows for the selected day, not just the
-    // newest), oldest-first — feeds the focus-route polyline below. Kept
-    // separate from allDbMarkers/latestMarkerByLabel since those are
-    // marker-shaped, not plain entry data.
+    // newest), newest-first (same order as the loaded entries) — feeds the
+    // focus-route polyline below. Kept separate from
+    // allDbMarkers/latestMarkerByLabel since those are marker-shaped, not
+    // plain entry data.
     let entriesByLabel = {};
     // Same color a label's dots use, keyed by label — so the route line
     // drawn when focusing a label matches its own pins instead of a fixed
     // color. Reused (not recomputed) from renderDbMarkers' color pass.
     let labelColorMap = {};
+    // The label currently shown by the focus route line (if any) — null
+    // once deselected. Kept separate from focusSelect.value because
+    // renderFocusRow() below rebuilds the <select>'s options on every
+    // entries reload — the 5s poll (today only) *and* the 20s
+    // reconcileConnectivity() interval below (runs regardless of which day
+    // is selected) — which resets the browser's own selection; this is
+    // what survives that rebuild so either one can restore it.
+    let focusedLabel = null;
     // The currently drawn focus-route line, if any — tracked so focusing a
     // different label (or reloading entries) can remove the previous one
     // instead of stacking lines on top of each other.
@@ -545,13 +554,6 @@
       allDbMarkers = [];
       latestMarkerByLabel = {};
       entriesByLabel = {};
-      // The old focus route (if any) refers to markers/entries that just
-      // got wiped above — drop it rather than leave a stale line pointing
-      // at data that's no longer on the map.
-      if (focusPolyline) {
-        map.removeLayer(focusPolyline);
-        focusPolyline = null;
-      }
       labelColorMap = assignColorsByFirstSeen(entries);
       entries.forEach((entry) => {
         const icon = getDbIcon(labelColorMap[entry.label]);
@@ -582,6 +584,7 @@
 
       if (uniqueLabels.length === 0) {
         focusRow.hidden = true;
+        focusedLabel = null;
         return;
       }
       focusRow.hidden = false;
@@ -590,6 +593,42 @@
         uniqueLabels
           .map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`)
           .join("");
+      // Rebuilding the <select>'s options resets the browser's own
+      // selection to the first ("— fokussieren —") option — restore
+      // whichever label was focused, if it still has entries, so the 5s
+      // poll doesn't silently un-focus the dropdown out from under the
+      // user. updateFocusPolyline() (called by loadEntries right after
+      // this) picks focusedLabel back up to redraw the route line too.
+      if (focusedLabel && uniqueLabels.includes(focusedLabel)) {
+        focusSelect.value = focusedLabel;
+      } else {
+        focusedLabel = null;
+      }
+    }
+
+    // (re)draws the focus-route line from whatever entriesByLabel /
+    // labelColorMap currently hold for focusedLabel, without touching the
+    // map's current pan/zoom — called after every entries reload (day
+    // switch, the 5s today-only poll, and the 20s reconcileConnectivity()
+    // interval, which runs on any day), so those redraw the line instead of
+    // just blanking it (renderDbMarkers wipes all layers including this
+    // one). Manual focusing (the focusSelect handler below) additionally
+    // fits the view to the freshly drawn line — that's deliberately not
+    // done here, same "don't fight the user's current view" rule as follow
+    // mode.
+    function updateFocusPolyline() {
+      if (focusPolyline) {
+        map.removeLayer(focusPolyline);
+        focusPolyline = null;
+      }
+      if (!focusedLabel) return;
+      const routeEntries = (entriesByLabel[focusedLabel] || []).slice().reverse();
+      if (routeEntries.length > 1) {
+        focusPolyline = L.polyline(
+          routeEntries.map((e) => [e.lat, e.lng]),
+          { color: labelColorMap[focusedLabel] || "#1976d2", weight: 3, opacity: 0.8 }
+        ).addTo(map);
+      }
     }
 
     function escapeHtml(str) {
@@ -630,6 +669,7 @@
         const entries = await res.json();
         renderDbMarkers(entries);
         renderFocusRow(entries);
+        updateFocusPolyline();
         loadedDate = requestedDate;
         markSyncOk();
       } catch {
@@ -855,6 +895,7 @@
       const requestedDate = dateSelect.value;
       selectedDate = requestedDate;
       focusSelect.value = "";
+      focusedLabel = null;
       // loadEntries() may revert selectedDate (and dateSelect.value) back to
       // loadedDate on failure — in that case the switch never actually
       // happened, so applyDateMode() is skipped and everything (view/live
@@ -872,7 +913,11 @@
 
     focusSelect.addEventListener("change", () => {
       const label = focusSelect.value;
-      if (!label) return;
+      focusedLabel = label || null;
+      if (!label) {
+        updateFocusPolyline();
+        return;
+      }
       const marker = latestMarkerByLabel[label];
       if (marker) {
         // Otherwise the next watchPosition update pans right back to your
@@ -882,26 +927,14 @@
         followMode = false;
         collapsePanel();
 
-        if (focusPolyline) {
-          map.removeLayer(focusPolyline);
-          focusPolyline = null;
-        }
-
-        // entriesByLabel is newest-first (same order as the loaded
-        // entries); a route line reads oldest-to-newest.
-        const routeEntries = (entriesByLabel[label] || []).slice().reverse();
-
         withFollowSuppressed(() => {
-          if (routeEntries.length > 1) {
+          updateFocusPolyline();
+          if (focusPolyline) {
             // A label with several pins on this day (e.g. a bike ride
             // posting every 2 min from the Android app, not the web form)
             // reads better as a connected route than as a pile of loose
-            // dots — draw the line and frame the whole thing, instead of
-            // zoomToShowLayer's "just the newest pin" behavior below.
-            focusPolyline = L.polyline(
-              routeEntries.map((e) => [e.lat, e.lng]),
-              { color: labelColorMap[label] || "#1976d2", weight: 3, opacity: 0.8 }
-            ).addTo(map);
+            // dots — frame the whole line instead of zoomToShowLayer's
+            // "just the newest pin" behavior below.
             map.fitBounds(focusPolyline.getBounds().pad(0.2));
             marker.openPopup();
           } else {
@@ -960,6 +993,7 @@
       withFollowSuppressed(() => map.setView(offsetForPanel([lat, lng], 15), 15));
       myMarker.openPopup();
       focusSelect.value = "";
+      focusedLabel = null;
       showStatus("Position gepostet.", false);
 
       // A post always happens "now" — jump the view to today so the
