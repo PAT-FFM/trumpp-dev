@@ -234,7 +234,17 @@ separate document).
   - Initial map centering: own live position (via `getCurrentPosition()`) at
     street-level zoom. The geolocation permission prompt fires immediately
     on load — that's the whole point of the page; a use case of "view
-    positions without sharing your own" is not supported.
+    positions without sharing your own" is not supported. On mobile the
+    control panel is a full-width bottom sheet covering roughly the lower
+    half of the screen, so every place that centers on the own position
+    (initial load, follow mode's continuous `panTo`, "Standort neu
+    ermitteln", `enterLiveMode()`, right after posting) runs the target
+    latlng through `offsetForPanel()` first — it nudges the effective
+    center south by half the panel's actually-rendered height (measured via
+    `getBoundingClientRect()`, not assumed), so the marker lands in the
+    middle of the space still visible above the panel instead of directly
+    behind it. No-op on desktop (small floating card, doesn't obscure the
+    center) or while the panel is collapsed.
   - The "You" pin is **draggable** — lets the user correct a slightly-off
     GPS fix or deliberately mark a nearby place before arriving there.
   - **Follow mode:** besides the initial one-shot fix, `location.html` also
@@ -245,11 +255,20 @@ separate document).
     mid-drag) so a manual correction isn't immediately overwritten by the
     next fix, and likewise whenever "fokussieren" or "Show all pins" sets a
     deliberate framing — without this a GPS update a moment later would pan
-    straight back to your own position and undo it. The map itself can
-    still be freely panned/zoomed without affecting follow mode. Re-enabled
-    by "Standort neu ermitteln", which is now both "fetch a fresh fix" and
-    "resume following". Watch errors (brief signal loss while moving) are
-    silently ignored — same "don't interrupt for
+    straight back to your own position and undo it. Manually panning or
+    zooming the map itself also turns follow mode off — a `map.on("dragstart"
+    | "zoomstart", ...)` listener — otherwise looking around today's map
+    while live tracking is on gets fought by a re-center every few seconds
+    on the next GPS fix. Our own programmatic map moves (recenter, focus a
+    label, "Show all pins", after posting, live-follow's own panTo) would
+    otherwise trip that same `zoomstart` listener, so every one of them
+    routes through a `withFollowSuppressed()` wrapper that mutes it for the
+    duration of the call — applied uniformly at every call site rather than
+    only where it's strictly needed, so nobody has to reason case-by-case
+    about whether a given call already happens to leave follow mode in the
+    right state. Re-enabled by "Standort neu ermitteln", which is now both
+    "fetch a fresh fix" and "resume following". Watch errors (brief signal
+    loss while moving) are silently ignored — same "don't interrupt for
     something transient" reasoning as elsewhere in this feature.
   - Required label field + "Post position" button: posts whichever
     coordinates the "You" pin currently shows (GPS or manually dragged), not

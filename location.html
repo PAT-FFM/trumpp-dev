@@ -259,10 +259,33 @@
     let latestMarkerByLabel = {};
 
     // While true, live GPS updates move the "You" marker and pan the map
-    // to follow — off once the marker is dragged, so a correction/pre-
-    // placement isn't immediately overwritten by the next GPS fix.
+    // to follow — off once the marker is dragged, or the map itself is
+    // panned/zoomed by hand, so a correction/pre-placement or a deliberate
+    // look-around isn't immediately overwritten by the next GPS fix.
     // Re-enabled by "Standort neu ermitteln".
     let followMode = true;
+
+    // Every one of our own map.setView/panTo/fitBounds/zoomToShowLayer
+    // calls goes through this — dragstart only ever fires from a genuine
+    // mouse/touch drag (never programmatically), but zoomstart fires for
+    // both a user's manual zoom (wheel/pinch/+-/dblclick) and our own
+    // programmatic zoom changes, so those need to be told apart. Wrapping
+    // uniformly, even at call sites that already set followMode themselves,
+    // means no per-call-site judgment call about whether suppression is
+    // "needed" — it's a harmless no-op wherever it isn't.
+    let suppressFollowBreak = false;
+    function withFollowSuppressed(fn) {
+      suppressFollowBreak = true;
+      fn();
+      suppressFollowBreak = false;
+    }
+    map.on("dragstart", () => {
+      followMode = false;
+    });
+    map.on("zoomstart", () => {
+      if (suppressFollowBreak) return;
+      followMode = false;
+    });
 
     // Nearby DB pins collapse into a single neutral cluster icon (plain
     // black circle with a count) so a spot with several stacked pins isn't
@@ -349,6 +372,25 @@
     const dateSelect = document.getElementById("dateSelect");
     const staleHint = document.getElementById("staleHint");
     const queueHint = document.getElementById("queueHint");
+
+    // On mobile the control panel is a full-width bottom sheet covering
+    // roughly the lower half of the screen (see .panel CSS) — plainly
+    // centering "You" on its own latlng puts the marker right behind the
+    // panel, invisible. Returns a latlng nudged south by half the panel's
+    // actually-rendered height, so that once passed to setView/panTo the
+    // marker lands in the middle of the space still visible above the
+    // panel instead of dead-center. project()/unproject() do the pixel
+    // math at the given zoom, then convert back to a latlng — the standard
+    // Leaflet trick for an off-center "setView". No-op (returns latlng
+    // unchanged) on desktop, where the panel is a small floating card that
+    // doesn't obscure the map center, or while the panel is collapsed.
+    function offsetForPanel(latlng, zoom) {
+      const isMobileSheet = window.matchMedia("(max-width: 639px)").matches;
+      if (!isMobileSheet || panelEl.classList.contains("collapsed")) return latlng;
+      const panelHeight = panelEl.getBoundingClientRect().height;
+      const point = map.project(latlng, zoom).add([0, panelHeight / 2]);
+      return map.unproject(point, zoom);
+    }
 
     // Aborts a fetch after timeoutMs — on flaky mobile signal a request can
     // otherwise hang far longer than a genuine dead zone would need to fail,
@@ -457,7 +499,9 @@
           if (!followMode) return;
           const { latitude, longitude } = pos.coords;
           updateMyMarker(latitude, longitude);
-          map.panTo([latitude, longitude]);
+          withFollowSuppressed(() =>
+            map.panTo(offsetForPanel([latitude, longitude], map.getZoom()))
+          );
         },
         () => {},
         { enableHighAccuracy: true, maximumAge: 5000 }
@@ -745,7 +789,7 @@
         // dragging the pin.
         followMode = false;
         collapsePanel();
-        map.fitBounds(L.featureGroup(layers).getBounds().pad(0.2));
+        withFollowSuppressed(() => map.fitBounds(L.featureGroup(layers).getBounds().pad(0.2)));
       }
     }
 
@@ -773,7 +817,7 @@
       followMode = true;
       if (myMarker) {
         if (!map.hasLayer(myMarker)) myMarker.addTo(map);
-        map.setView(myMarker.getLatLng(), 15);
+        withFollowSuppressed(() => map.setView(offsetForPanel(myMarker.getLatLng(), 15), 15));
       }
     }
 
@@ -818,8 +862,10 @@
         // zoomToShowLayer (statt setView) zoomt genau so weit rein, bis der
         // Marker aus seinem Cluster "herausfällt" — ein festes Zoom-Level
         // würde ihn sonst ggf. weiterhin geclustert lassen.
-        dbMarkerCluster.zoomToShowLayer(marker, () => {
-          marker.openPopup();
+        withFollowSuppressed(() => {
+          dbMarkerCluster.zoomToShowLayer(marker, () => {
+            marker.openPopup();
+          });
         });
       }
     });
@@ -865,7 +911,7 @@
     });
 
     async function onPositionAccepted(lat, lng) {
-      map.setView([lat, lng], 15);
+      withFollowSuppressed(() => map.setView(offsetForPanel([lat, lng], 15), 15));
       myMarker.openPopup();
       focusSelect.value = "";
       showStatus("Position gepostet.", false);
@@ -893,7 +939,7 @@
         const { latitude, longitude } = pos.coords;
         followMode = true;
         updateMyMarker(latitude, longitude);
-        map.setView([latitude, longitude], 15);
+        withFollowSuppressed(() => map.setView(offsetForPanel([latitude, longitude], 15), 15));
         showStatus("Standort aktualisiert.", false);
       } catch (err) {
         showStatus(geolocationErrorMessage(err), true);
@@ -916,7 +962,7 @@
       const [posResult] = await Promise.allSettled([getFreshPosition(), loadEntries()]);
       if (posResult.status === "fulfilled") {
         const { latitude, longitude } = posResult.value.coords;
-        map.setView([latitude, longitude], 15);
+        withFollowSuppressed(() => map.setView(offsetForPanel([latitude, longitude], 15), 15));
         updateMyMarker(latitude, longitude);
       } else {
         showStatus(geolocationErrorMessage(posResult.reason), true);
