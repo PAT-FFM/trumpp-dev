@@ -270,6 +270,21 @@ separate document).
     "fetch a fresh fix" and "resume following". Watch errors (brief signal
     loss while moving) are silently ignored — same "don't interrupt for
     something transient" reasoning as elsewhere in this feature.
+  - **Speed badge (experimental):** a small pill top-right of the map shows
+    the current speed from `GeolocationCoordinates.speed` (m/s, converted to
+    km/h), fed by every fresh fix — the initial load, "Standort neu
+    ermitteln", and every `watchPosition()` update, regardless of follow
+    mode. Rounded to whole km/h (`Math.round`, not `toFixed(1)`) —
+    `coords.speed` isn't that precise (device/OS-dependent, often derived
+    from GPS Doppler shift rather than differentiating position over time),
+    so one decimal place would be false precision. Hidden entirely
+    (`speedBadge.hidden`) rather than showing "0 km/h" whenever a fix
+    doesn't carry a speed value (stationary, weak signal, or a device that
+    just doesn't report it) — added purely to see how it behaves in
+    practice across transport modes (bike/car/train); not documented as a
+    committed feature, so revert cleanly (remove the `#speedBadge` element,
+    its CSS, and the three `updateSpeedBadge()` call sites) if it turns out
+    to be more noise than signal.
   - Required label field + "Post position" button: posts whichever
     coordinates the "You" pin currently shows (GPS or manually dragged), not
     a fresh GPS fetch — dragging would otherwise be overwritten on every
