@@ -199,11 +199,33 @@
     #status.ok {
       color: #2e7d32;
     }
+
+    /* Experimental: shows navigator.geolocation's coords.speed (m/s ->
+       km/h) whenever a fix reports one. Top-right rather than a real map
+       footer, since the bottom sheet panel covers that area on mobile. */
+    .speed-badge {
+      position: fixed;
+      top: 0.75rem;
+      right: 0.75rem;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 0.35rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #1976d2;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    .speed-badge[hidden] {
+      display: none;
+    }
   </style>
 </head>
 
 <body>
   <div id="map"></div>
+  <div id="speedBadge" class="speed-badge" hidden></div>
 
   <div class="panel">
     <div class="date-row">
@@ -394,6 +416,7 @@
     const dateSelect = document.getElementById("dateSelect");
     const staleHint = document.getElementById("staleHint");
     const queueHint = document.getElementById("queueHint");
+    const speedBadge = document.getElementById("speedBadge");
 
     // On mobile the control panel is a full-width bottom sheet covering
     // roughly the lower half of the screen (see .panel CSS) — plainly
@@ -518,6 +541,7 @@
       if (!navigator.geolocation) return;
       navigator.geolocation.watchPosition(
         (pos) => {
+          updateSpeedBadge(pos.coords.speed);
           if (!followMode) return;
           const { latitude, longitude } = pos.coords;
           updateMyMarker(latitude, longitude);
@@ -528,6 +552,20 @@
         () => {},
         { enableHighAccuracy: true, maximumAge: 5000 }
       );
+    }
+
+    // Experimental. coords.speed is m/s, in-spec but device/OS-dependent
+    // (often Doppler-derived from the GPS signal, more accurate than
+    // diffing two fixes — but null whenever the fix doesn't carry one, e.g.
+    // while stationary or on a weak signal), so hide the badge rather than
+    // show a misleading 0.
+    function updateSpeedBadge(speedMps) {
+      if (speedMps === null || speedMps === undefined) {
+        speedBadge.hidden = true;
+        return;
+      }
+      speedBadge.hidden = false;
+      speedBadge.textContent = `${(speedMps * 3.6).toFixed(1)} km/h`;
     }
 
     function updateMyMarker(lat, lng) {
@@ -1016,9 +1054,10 @@
       showStatus("Position wird ermittelt…", false);
       try {
         const pos = await getFreshPosition();
-        const { latitude, longitude } = pos.coords;
+        const { latitude, longitude, speed } = pos.coords;
         followMode = true;
         updateMyMarker(latitude, longitude);
+        updateSpeedBadge(speed);
         withFollowSuppressed(() => map.setView(offsetForPanel([latitude, longitude], 15), 15));
         showStatus("Standort aktualisiert.", false);
       } catch (err) {
@@ -1041,9 +1080,10 @@
       await loadAvailableDays();
       const [posResult] = await Promise.allSettled([getFreshPosition(), loadEntries()]);
       if (posResult.status === "fulfilled") {
-        const { latitude, longitude } = posResult.value.coords;
+        const { latitude, longitude, speed } = posResult.value.coords;
         withFollowSuppressed(() => map.setView(offsetForPanel([latitude, longitude], 15), 15));
         updateMyMarker(latitude, longitude);
+        updateSpeedBadge(speed);
       } else {
         showStatus(geolocationErrorMessage(posResult.reason), true);
       }
