@@ -565,7 +565,7 @@
         return;
       }
       speedBadge.hidden = false;
-      speedBadge.textContent = `${(speedMps * 3.6).toFixed(1)} km/h`;
+      speedBadge.textContent = `${Math.round(speedMps * 3.6)} km/h`;
     }
 
     function updateMyMarker(lat, lng) {
