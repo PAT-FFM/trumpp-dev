@@ -1,1 +1,667 @@
 
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Einpark-Neuron: Training und Animation</title>
+<style>
+  body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 0.9rem; }
+  .lbl { font-size: 14px; color: #555; min-width: 110px; }
+  input[type=range] { flex: 1; }
+  button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
+  .box { background: #f2f2f0; border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 90px; }
+  .box .lbl2 { font-size: 12px; color: #555; margin-bottom: 2px; }
+  .box .val { font-size: 18px; font-weight: 600; }
+  svg { width: 100%; height: 140px; margin-bottom: 0.75rem; border: 1px solid #ddd; border-radius: 8px; }
+  #readout, #readoutSD { font-size: 15px; font-weight: 600; margin-bottom: 0.6rem; }
+  .tabBtn { background: #f2f2f0; border: 1px solid #ddd; }
+  .tabBtn.active { background: #378ADD; border-color: #378ADD; color: #fff; }
+  .pedalBtn { flex: 1; padding: 18px 0; font-size: 15px; font-weight: 600; border-radius: 10px; border: 1px solid #ccc; user-select: none; -webkit-user-select: none; touch-action: none; }
+  .pedalBtn:active, .pedalBtn.pressed { filter: brightness(0.9); }
+  #gasBtnSD { background: #dff5df; color: #1a7a1a; }
+  #bremseBtnSD { background: #fbe0dc; color: #b3311c; }
+</style>
+</head>
+<body>
+
+<h2>Einpark-Neuron: Training und Animation</h2>
+
+<div class="row" style="gap:8px">
+  <button id="tabSelfDrive" class="tabBtn active">Self-Drive</button>
+  <button id="tabTraining" class="tabBtn">Training</button>
+</div>
+
+<div id="trainingPanel" hidden>
+
+<div class="row">
+  <span class="lbl">Startdistanz</span>
+  <input type="range" id="d0slider" min="5" max="40" step="1" value="20">
+  <span class="lbl" id="d0label" style="min-width:50px">20 m</span>
+</div>
+
+<div class="row">
+  <button id="trainBtn">Trainieren</button>
+  <span class="lbl" id="status" style="min-width:220px">noch nicht trainiert</span>
+</div>
+
+<div class="row">
+  <div class="box"><div class="lbl2">Gewicht w</div><div class="val" id="wVal">-</div></div>
+  <div class="box"><div class="lbl2">Schwelle b</div><div class="val" id="bVal">-</div></div>
+  <div class="box"><div class="lbl2">Strafpunkte</div><div class="val" id="noteVal">-</div></div>
+</div>
+
+<svg viewBox="0 0 680 140">
+  <rect x="40" y="90" width="600" height="4" fill="#ccc"/>
+  <rect x="620" y="50" width="20" height="60" fill="#888"/>
+  <text x="650" y="45" text-anchor="end" font-size="12" fill="#555">Wand</text>
+  <g id="motion"></g>
+  <g id="car" transform="translate(560,0)">
+    <rect x="0" y="70" width="60" height="18" rx="5" fill="#378ADD"/>
+    <path d="M 12 70 L 18 58 L 42 58 L 48 70 Z" fill="#378ADD"/>
+    <path d="M 20 68 L 24 61 L 40 61 L 44 68 Z" fill="#cfe9ff" stroke="#2a6bb0" stroke-width="1"/>
+    <circle cx="14" cy="90" r="7" fill="#333"/>
+    <circle cx="14" cy="90" r="2.5" fill="#ccc"/>
+    <circle cx="46" cy="90" r="7" fill="#333"/>
+    <circle cx="46" cy="90" r="2.5" fill="#ccc"/>
+  </g>
+</svg>
+
+<div style="display:flex;justify-content:center;align-items:flex-end;gap:24px;margin-bottom:0.5rem">
+  <div style="text-align:center">
+    <svg viewBox="0 0 200 120" style="width:220px;height:auto;border:none;display:block;margin:0 auto">
+      <path d="M 25 100 A 75 75 0 0 1 175 100" fill="none" stroke="#e5e5e2" stroke-width="12" stroke-linecap="round"/>
+      <line x1="25" y1="100" x2="35" y2="100" stroke="#999" stroke-width="2"/>
+      <line x1="100" y1="25" x2="100" y2="35" stroke="#999" stroke-width="2"/>
+      <line x1="175" y1="100" x2="165" y2="100" stroke="#999" stroke-width="2"/>
+      <text x="25" y="115" text-anchor="middle" font-size="11" fill="#555">0</text>
+      <text x="100" y="18" text-anchor="middle" font-size="11" fill="#555">20</text>
+      <text x="175" y="115" text-anchor="middle" font-size="11" fill="#555">40</text>
+      <g id="needle" transform="rotate(-90 100 100)">
+        <line x1="100" y1="100" x2="100" y2="38" stroke="#D85A30" stroke-width="4" stroke-linecap="round"/>
+      </g>
+      <circle cx="100" cy="100" r="8" fill="#D85A30"/>
+      <circle cx="100" cy="100" r="3" fill="#fff"/>
+    </svg>
+    <div style="font-size:14px;font-weight:600" id="speedLabel">0.0 km/h</div>
+  </div>
+  <div style="text-align:center">
+    <div style="font-size:12px;color:#555;margin-bottom:2px">Gas / Bremse</div>
+    <svg viewBox="0 0 60 130" style="width:56px;height:126px;border:none;display:block;margin:0 auto">
+      <text x="30" y="10" text-anchor="middle" font-size="11" fill="#555">1</text>
+      <rect x="20" y="15" width="20" height="100" fill="#f2f2f0" stroke="#ccc" stroke-width="1"/>
+      <rect id="throttleFill" x="20" y="65" width="20" height="0" fill="#3B6D11"/>
+      <line x1="14" y1="65" x2="46" y2="65" stroke="#999" stroke-width="1.5"/>
+      <text x="30" y="127" text-anchor="middle" font-size="11" fill="#555">-1</text>
+    </svg>
+    <div style="font-size:14px;font-weight:600" id="actionLabel">0.00</div>
+  </div>
+</div>
+
+<div id="readout">t=0.0s</div>
+<button id="playBtn" disabled>Animation starten</button>
+
+<textarea id="logArea" readonly rows="10" style="display:block;width:100%;box-sizing:border-box;margin-top:0.6rem;font-family:monospace;font-size:12px;resize:vertical;overflow-y:auto"></textarea>
+
+<div id="chartWrap" style="display:none;margin-top:0.6rem">
+  <div style="font-size:12px;color:#555;margin-bottom:2px">Gas/Bremse über Zeit</div>
+  <svg id="actionChart" viewBox="0 0 680 160"></svg>
+</div>
+
+<div id="speedChartWrap" style="display:none;margin-top:0.6rem">
+  <div style="font-size:12px;color:#555;margin-bottom:2px">Geschwindigkeit über Zeit</div>
+  <svg id="speedChart" viewBox="0 0 680 160"></svg>
+</div>
+
+<div id="distChartWrap" style="display:none;margin-top:0.6rem">
+  <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz über Zeit</div>
+  <svg id="distChart" viewBox="0 0 680 160"></svg>
+</div>
+
+</div>
+
+<div id="selfDrivePanel">
+
+<div class="row">
+  <span class="lbl">Startdistanz</span>
+  <input type="range" id="d0sliderSD" min="5" max="40" step="1" value="20">
+  <span class="lbl" id="d0labelSD" style="min-width:50px">20 m</span>
+</div>
+
+<div class="row">
+  <span class="lbl" style="min-width:0">Steuerung: Pfeiltaste hoch = Gas, Pfeiltaste runter = Bremse (halten bewegt den Regler, loslassen haelt ihn). Auf dem Handy stattdessen die Buttons unten gedrueckt halten.</span>
+</div>
+
+<div class="row">
+  <button type="button" id="gasBtnSD" class="pedalBtn">▲ Gas</button>
+  <button type="button" id="bremseBtnSD" class="pedalBtn">▼ Bremse</button>
+</div>
+
+<div class="row">
+  <button id="sdStartBtn">Fahrt starten</button>
+  <span class="lbl" id="sdStatus" style="min-width:220px">bereit</span>
+</div>
+
+<div class="row">
+  <div class="box"><div class="lbl2">Strafpunkte</div><div class="val" id="noteValSD">-</div></div>
+</div>
+
+<svg viewBox="0 0 680 140">
+  <rect x="40" y="90" width="600" height="4" fill="#ccc"/>
+  <rect x="620" y="50" width="20" height="60" fill="#888"/>
+  <text x="650" y="45" text-anchor="end" font-size="12" fill="#555">Wand</text>
+  <g id="motionSD"></g>
+  <g id="carSD" transform="translate(560,0)">
+    <rect x="0" y="70" width="60" height="18" rx="5" fill="#378ADD"/>
+    <path d="M 12 70 L 18 58 L 42 58 L 48 70 Z" fill="#378ADD"/>
+    <path d="M 20 68 L 24 61 L 40 61 L 44 68 Z" fill="#cfe9ff" stroke="#2a6bb0" stroke-width="1"/>
+    <circle cx="14" cy="90" r="7" fill="#333"/>
+    <circle cx="14" cy="90" r="2.5" fill="#ccc"/>
+    <circle cx="46" cy="90" r="7" fill="#333"/>
+    <circle cx="46" cy="90" r="2.5" fill="#ccc"/>
+  </g>
+</svg>
+
+<div style="display:flex;justify-content:center;align-items:flex-end;gap:24px;margin-bottom:0.5rem">
+  <div style="text-align:center">
+    <svg viewBox="0 0 200 120" style="width:220px;height:auto;border:none;display:block;margin:0 auto">
+      <path d="M 25 100 A 75 75 0 0 1 175 100" fill="none" stroke="#e5e5e2" stroke-width="12" stroke-linecap="round"/>
+      <line x1="25" y1="100" x2="35" y2="100" stroke="#999" stroke-width="2"/>
+      <line x1="100" y1="25" x2="100" y2="35" stroke="#999" stroke-width="2"/>
+      <line x1="175" y1="100" x2="165" y2="100" stroke="#999" stroke-width="2"/>
+      <text x="25" y="115" text-anchor="middle" font-size="11" fill="#555">0</text>
+      <text x="100" y="18" text-anchor="middle" font-size="11" fill="#555">20</text>
+      <text x="175" y="115" text-anchor="middle" font-size="11" fill="#555">40</text>
+      <g id="needleSD" transform="rotate(-90 100 100)">
+        <line x1="100" y1="100" x2="100" y2="38" stroke="#D85A30" stroke-width="4" stroke-linecap="round"/>
+      </g>
+      <circle cx="100" cy="100" r="8" fill="#D85A30"/>
+      <circle cx="100" cy="100" r="3" fill="#fff"/>
+    </svg>
+    <div style="font-size:14px;font-weight:600" id="speedLabelSD">0.0 km/h</div>
+  </div>
+  <div style="text-align:center">
+    <div style="font-size:12px;color:#555;margin-bottom:2px">Gas / Bremse</div>
+    <svg viewBox="0 0 60 130" style="width:56px;height:126px;border:none;display:block;margin:0 auto">
+      <text x="30" y="10" text-anchor="middle" font-size="11" fill="#555">1</text>
+      <rect x="20" y="15" width="20" height="100" fill="#f2f2f0" stroke="#ccc" stroke-width="1"/>
+      <rect id="throttleFillSD" x="20" y="65" width="20" height="0" fill="#3B6D11"/>
+      <line x1="14" y1="65" x2="46" y2="65" stroke="#999" stroke-width="1.5"/>
+      <text x="30" y="127" text-anchor="middle" font-size="11" fill="#555">-1</text>
+    </svg>
+    <div style="font-size:14px;font-weight:600" id="actionLabelSD">0.00</div>
+  </div>
+</div>
+
+<div id="readoutSD">t=0.0s</div>
+
+<textarea id="logAreaSD" readonly rows="10" style="display:block;width:100%;box-sizing:border-box;margin-top:0.6rem;font-family:monospace;font-size:12px;resize:vertical;overflow-y:auto"></textarea>
+
+<div id="chartWrapSD" style="display:none;margin-top:0.6rem">
+  <div style="font-size:12px;color:#555;margin-bottom:2px">Gas/Bremse über Zeit</div>
+  <svg id="actionChartSD" viewBox="0 0 680 160"></svg>
+</div>
+
+<div id="speedChartWrapSD" style="display:none;margin-top:0.6rem">
+  <div style="font-size:12px;color:#555;margin-bottom:2px">Geschwindigkeit über Zeit</div>
+  <svg id="speedChartSD" viewBox="0 0 680 160"></svg>
+</div>
+
+<div id="distChartWrapSD" style="display:none;margin-top:0.6rem">
+  <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz über Zeit</div>
+  <svg id="distChartSD" viewBox="0 0 680 160"></svg>
+</div>
+
+</div>
+
+<script>
+const maxAccel = 2.0, dt = 0.1, maxT = 10.0;
+// Realistisch ist "an der Wand ankommen" kein Sonderfall: Unter 1cm Abstand
+// gilt bereits als Kontakt/Crash, nicht erst bei exakt 0.
+const crashDist = 0.01;
+let d0 = 20.0;
+let w = 0.5, b = -0.5;
+
+function tanh(x) { return Math.tanh(x); }
+
+function noteFor(dist, speed, crashed) {
+  let note = dist * dist * 1000 + speed * speed * 100;
+  if (crashed) note += 50000 + Math.abs(speed) * 5000;
+  return note;
+}
+
+function simulate(w, b, d0) {
+  let dist = d0, speed = 0, t = 0, crashed = false;
+  const traj = [{ t, dist, speed, action: 0 }];
+  while (t < maxT - 1e-9) {
+    const action = tanh(w * (dist / d0) + b);
+    speed = Math.max(0, speed + action * maxAccel * dt);
+    dist -= speed * dt;
+    t += dt;
+    if (dist <= crashDist) {
+      crashed = true;
+      dist = 0;
+      traj.push({ t, dist, speed, action });
+      break;
+    }
+    traj.push({ t, dist, speed, action });
+  }
+  const last = traj[traj.length - 1];
+  const note = noteFor(last.dist, last.speed, crashed);
+  return { traj, note, crashed };
+}
+
+function costOf(w, b, d0) { return simulate(w, b, d0).note; }
+
+const wallX = 620, carW = 60, roadStart = 40, usable = 520;
+function placeCar(dist, d0Val = d0, carId = 'car', crashed = false) {
+  const x = Math.max(roadStart, wallX - carW - (dist / d0Val) * usable);
+  // Minimale Crash-Visualisierung: Auto auf den Kopf stellen (180°-Drehung
+  // um seinen eigenen Mittelpunkt, danach an die Weltposition verschieben).
+  const rotate = crashed ? ' rotate(180,30,77)' : '';
+  document.getElementById(carId).setAttribute('transform', 'translate(' + x.toFixed(1) + ',0)' + rotate);
+  return x;
+}
+placeCar(d0);
+
+const maxSpeedGauge = 40;
+function updateGauge(speedKmh, needleId = 'needle', speedLabelId = 'speedLabel') {
+  const clamped = Math.max(0, Math.min(speedKmh, maxSpeedGauge));
+  const angle = -90 + (clamped / maxSpeedGauge) * 180;
+  document.getElementById(needleId).setAttribute('transform', 'rotate(' + angle + ' 100 100)');
+  document.getElementById(speedLabelId).textContent = speedKmh.toFixed(1) + ' km/h';
+}
+updateGauge(0);
+
+const throttleCenter = 65, throttleHalf = 50;
+function updateThrottle(action, fillId = 'throttleFill', labelId = 'actionLabel') {
+  const a = Math.max(-1, Math.min(1, action));
+  const fill = document.getElementById(fillId);
+  if (a >= 0) {
+    fill.setAttribute('y', (throttleCenter - a * throttleHalf).toFixed(1));
+    fill.setAttribute('height', (a * throttleHalf).toFixed(1));
+    fill.setAttribute('fill', '#3B6D11');
+  } else {
+    fill.setAttribute('y', throttleCenter);
+    fill.setAttribute('height', (-a * throttleHalf).toFixed(1));
+    fill.setAttribute('fill', '#993C1D');
+  }
+  const actionLbl = document.getElementById(labelId);
+  actionLbl.textContent = (action >= 0 ? '+' : '') + action.toFixed(2);
+  actionLbl.style.color = action >= 0 ? '#3B6D11' : '#993C1D';
+}
+updateThrottle(0);
+
+let trainedForD0 = null;
+
+document.getElementById('d0slider').addEventListener('input', function () {
+  d0 = +this.value;
+  document.getElementById('d0label').textContent = d0 + ' m';
+  placeCar(d0);
+  updateGauge(0);
+  if (trainedForD0 !== null) {
+    const status = document.getElementById('status');
+    status.textContent = d0 === trainedForD0
+      ? 'trainiert fuer ' + d0 + ' m'
+      : 'w/b noch von ' + trainedForD0 + ' m (neu trainieren fuer ' + d0 + ' m?)';
+  }
+});
+
+// Ein einzelner Trainingsversuch: Zufallssuche + Sign-Gradient-Descent.
+// Der zu optimierende Cost ist wegen des Crashs nicht stetig (kleine
+// Aenderungen an w/b koennen abrupt zwischen "crasht" und "crasht nicht"
+// umschlagen), daher ist der numerische Gradient oft lokal flach und der
+// Descent kann in einem mittelmaessigen Crash-Punkt haengen bleiben, obwohl
+// eine bessere Loesung existiert. Die aeussere Schleife im Klick-Handler
+// wiederholt diesen Versuch deshalb mehrfach und behaelt den besten.
+function runOnce(d0) {
+  let bestW = 0.5, bestB = -0.5, bestCost = costOf(bestW, bestB, d0);
+  for (let k = 0; k < 60; k++) {
+    const rw = (Math.random() * 8 - 4), rb = (Math.random() * 6 - 3);
+    const c = costOf(rw, rb, d0);
+    if (c < bestCost) { bestCost = c; bestW = rw; bestB = rb; }
+  }
+  let w = bestW, b = bestB;
+
+  let stepW = 0.25, stepB = 0.25;
+  const eps = 0.02, totalSteps = 350;
+  for (let step = 0; step < totalSteps; step++) {
+    const cw = (costOf(w + eps, b, d0) - costOf(w - eps, b, d0)) / (2 * eps);
+    const cb = (costOf(w, b + eps, d0) - costOf(w, b - eps, d0)) / (2 * eps);
+    w -= Math.sign(cw) * stepW;
+    b -= Math.sign(cb) * stepB;
+    w = Math.max(-6, Math.min(6, w));
+    b = Math.max(-4, Math.min(4, b));
+    stepW *= 0.98; stepB *= 0.98;
+
+    // Sign-Gradient-Descent hat kein Gedaechtnis: er kann von einer bereits
+    // guten Loesung in eine flache Zone abdriften (Gradient dort exakt 0,
+    // z.B. wenn das Auto nie anfaehrt) und dort haengen bleiben. Deshalb den
+    // besten je gesehenen Zustand separat mitfuehren statt nur den letzten.
+    const c = costOf(w, b, d0);
+    if (c < bestCost) { bestCost = c; bestW = w; bestB = b; }
+  }
+  return { w: bestW, b: bestB, cost: bestCost };
+}
+
+document.getElementById('trainBtn').addEventListener('click', function () {
+  this.disabled = true;
+  document.getElementById('playBtn').disabled = true;
+  const status = document.getElementById('status');
+  status.textContent = 'suche startwerte ...';
+
+  // Mehrere unabhaengige Trainingsversuche, bester gewinnt: schuetzt gegen
+  // einen einzelnen ungluecklichen Versuch, der in einem mittelmaessigen
+  // Crash-Punkt haengen bleibt (siehe Kommentar bei runOnce).
+  const restarts = 5;
+  let best = runOnce(d0);
+  for (let i = 1; i < restarts; i++) {
+    const r = runOnce(d0);
+    if (r.cost < best.cost) best = r;
+  }
+
+  w = best.w; b = best.b;
+  trainedForD0 = d0;
+  document.getElementById('wVal').textContent = w.toFixed(3);
+  document.getElementById('bVal').textContent = b.toFixed(2);
+  document.getElementById('noteVal').textContent = Math.round(best.cost);
+  status.textContent = 'trainiert fuer ' + d0 + ' m';
+  document.getElementById('trainBtn').disabled = false;
+  document.getElementById('playBtn').disabled = false;
+});
+
+const logArea = document.getElementById('logArea');
+function logLine(p) {
+  const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
+  logArea.value += line;
+  logArea.scrollTop = logArea.scrollHeight;
+}
+
+const chartWrap = document.getElementById('chartWrap');
+const actionChart = document.getElementById('actionChart');
+const speedChartWrap = document.getElementById('speedChartWrap');
+const speedChart = document.getElementById('speedChart');
+const distChartWrap = document.getElementById('distChartWrap');
+const distChart = document.getElementById('distChart');
+
+// Generischer Zeit-Wert-Liniengraph, von renderChart (Gas/Bremse) und
+// renderSpeedChart (Geschwindigkeit) mit unterschiedlichem y-Wertebereich
+// und Werte-Extraktor wiederverwendet.
+function renderLineChart(traj, chartEl, wrapEl, opts) {
+  const w = 680, h = 160, left = 40, right = 10, top = 10, bottom = 25;
+  const plotW = w - left - right, plotH = h - top - bottom;
+  const tMax = traj[traj.length - 1].t;
+  const x = t => left + (tMax > 0 ? t / tMax : 0) * plotW;
+  const y = v => top + (1 - (v - opts.yMin) / (opts.yMax - opts.yMin)) * plotH;
+
+  let svg = '';
+  opts.yTicks.forEach(v => {
+    const yy = y(v);
+    svg += '<line x1="' + left + '" y1="' + yy + '" x2="' + (left + plotW) + '" y2="' + yy + '" stroke="' + (v === 0 ? '#ccc' : '#eee') + '" stroke-width="1"/>';
+    svg += '<text x="' + (left - 6) + '" y="' + (yy + 4) + '" text-anchor="end" font-size="11" fill="#555">' + v + '</text>';
+  });
+  [0, tMax / 2, tMax].forEach(tv => {
+    const xx = x(tv);
+    svg += '<line x1="' + xx + '" y1="' + top + '" x2="' + xx + '" y2="' + (top + plotH) + '" stroke="#f5f5f3" stroke-width="1"/>';
+    svg += '<text x="' + xx + '" y="' + (h - 6) + '" text-anchor="middle" font-size="11" fill="#555">' + tv.toFixed(1) + 's</text>';
+  });
+  const pts = traj.map(p => x(p.t).toFixed(1) + ',' + y(opts.valueFn(p)).toFixed(1)).join(' ');
+  svg += '<polyline points="' + pts + '" fill="none" stroke="' + opts.color + '" stroke-width="2"/>';
+
+  chartEl.innerHTML = svg;
+  wrapEl.style.display = 'block';
+}
+
+function renderChart(traj, chartEl = actionChart, wrapEl = chartWrap) {
+  renderLineChart(traj, chartEl, wrapEl, {
+    valueFn: p => p.action, yMin: -1, yMax: 1, yTicks: [1, 0, -1], color: '#378ADD'
+  });
+}
+
+function renderSpeedChart(traj, chartEl = speedChart, wrapEl = speedChartWrap) {
+  const maxSpeedKmh = Math.max(1, ...traj.map(p => p.speed * 3.6));
+  const yMax = Math.ceil(maxSpeedKmh / 10) * 10;
+  renderLineChart(traj, chartEl, wrapEl, {
+    valueFn: p => p.speed * 3.6, yMin: 0, yMax, yTicks: [yMax, yMax / 2, 0], color: '#D85A30'
+  });
+}
+
+function renderDistChart(traj, chartEl = distChart, wrapEl = distChartWrap) {
+  const yMax = Math.max(5, Math.ceil(traj[0].dist / 5) * 5);
+  renderLineChart(traj, chartEl, wrapEl, {
+    valueFn: p => p.dist, yMin: 0, yMax, yTicks: [yMax, yMax / 2, 0], color: '#8E44AD'
+  });
+}
+
+document.getElementById('playBtn').addEventListener('click', function () {
+  this.disabled = true;
+  logArea.value = '';
+  chartWrap.style.display = 'none';
+  speedChartWrap.style.display = 'none';
+  distChartWrap.style.display = 'none';
+  let lastLoggedIdx = -1;
+  const r = simulate(w, b, d0);
+  let stopIdx = r.traj.length - 1;
+  let hasMoved = false;
+  for (let i = 0; i < r.traj.length; i++) {
+    if (r.traj[i].speed > 0.3) hasMoved = true;
+    if (hasMoved && r.traj[i].speed <= 0.02) { stopIdx = i; break; }
+  }
+  const traj = r.traj.slice(0, stopIdx + 1);
+  const msPerSimSecond = 400;
+  const duration = Math.max(traj[traj.length - 1].t * msPerSimSecond, 400);
+  const start = performance.now();
+
+  function frame(now) {
+    const frac = Math.max(0, Math.min((now - start) / duration, 1));
+    const idx = Math.floor(frac * (traj.length - 1));
+    const p = traj[idx];
+    const isCrashFrame = r.crashed && idx === traj.length - 1;
+    const carX = placeCar(p.dist, d0, 'car', isCrashFrame);
+    const lines = Math.round((p.speed / 12) * 4);
+    let m = '';
+    for (let k = 0; k < lines; k++) {
+      const yy = 70 + k * 6;
+      m += '<line x1="' + (carX - 8 - k * 8) + '" y1="' + yy + '" x2="' + (carX - 2 - k * 8) + '" y2="' + yy + '" stroke="#999" stroke-width="2"/>';
+    }
+    document.getElementById('motion').innerHTML = m;
+    updateGauge(p.speed * 3.6);
+    updateThrottle(p.action);
+    document.getElementById('readout').textContent =
+      't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
+    if (idx !== lastLoggedIdx) {
+      logLine(p);
+      lastLoggedIdx = idx;
+    }
+    if (frac < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      document.getElementById('playBtn').disabled = false;
+      // Die Strafpunkte gehoeren zum tatsaechlich abgespielten Lauf (aktuelle
+      // Startdistanz), nicht zwingend zur Startdistanz, fuer die zuletzt
+      // trainiert wurde -- d0 kann sich per Slider seitdem geaendert haben.
+      document.getElementById('noteVal').textContent = Math.round(r.note);
+      renderChart(traj);
+      renderSpeedChart(traj);
+      renderDistChart(traj);
+    }
+  }
+  requestAnimationFrame(frame);
+});
+
+let sdOnLeave = null;
+
+function setTab(name) {
+  const isTraining = name === 'training';
+  document.getElementById('trainingPanel').hidden = !isTraining;
+  document.getElementById('selfDrivePanel').hidden = isTraining;
+  document.getElementById('tabTraining').classList.toggle('active', isTraining);
+  document.getElementById('tabSelfDrive').classList.toggle('active', !isTraining);
+  if (isTraining && sdOnLeave) sdOnLeave();
+}
+document.getElementById('tabTraining').addEventListener('click', function () { setTab('training'); });
+document.getElementById('tabSelfDrive').addEventListener('click', function () { setTab('selfdrive'); });
+
+(function () {
+  const d0Slider = document.getElementById('d0sliderSD');
+  const d0Label = document.getElementById('d0labelSD');
+  const startBtn = document.getElementById('sdStartBtn');
+  const gasBtn = document.getElementById('gasBtnSD');
+  const bremseBtn = document.getElementById('bremseBtnSD');
+  const statusEl = document.getElementById('sdStatus');
+  const noteEl = document.getElementById('noteValSD');
+  const readoutEl = document.getElementById('readoutSD');
+  const logAreaSD = document.getElementById('logAreaSD');
+  const chartWrapSD = document.getElementById('chartWrapSD');
+  const actionChartSD = document.getElementById('actionChartSD');
+  const speedChartWrapSD = document.getElementById('speedChartWrapSD');
+  const speedChartSD = document.getElementById('speedChartSD');
+  const distChartWrapSD = document.getElementById('distChartWrapSD');
+  const distChartSD = document.getElementById('distChartSD');
+
+  const timeLimit = 15.0;
+  const rampRate = 2.0; // Reglerwert-Aenderung pro Sekunde bei gehaltener Taste
+
+  let d0SD = +d0Slider.value;
+  let dist, speed, t, lever, crashed;
+  let running = false;
+  let keyUp = false, keyDown = false;
+  let trajSD = [];
+  let lastTime = 0, accumulator = 0, rafId = null;
+
+  placeCar(d0SD, d0SD, 'carSD');
+  updateGauge(0, 'needleSD', 'speedLabelSD');
+  updateThrottle(0, 'throttleFillSD', 'actionLabelSD');
+
+  d0Slider.addEventListener('input', function () {
+    d0SD = +this.value;
+    d0Label.textContent = d0SD + ' m';
+    if (!running) placeCar(d0SD, d0SD, 'carSD');
+  });
+
+  function logLineSD(p) {
+    const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
+    logAreaSD.value += line;
+    logAreaSD.scrollTop = logAreaSD.scrollHeight;
+  }
+
+  function renderState(p, crashedNow = false) {
+    placeCar(p.dist, d0SD, 'carSD', crashedNow);
+    updateGauge(p.speed * 3.6, 'needleSD', 'speedLabelSD');
+    updateThrottle(p.action, 'throttleFillSD', 'actionLabelSD');
+    readoutEl.textContent = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
+  }
+
+  function stop(reason) {
+    running = false;
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = null;
+    startBtn.disabled = false;
+    startBtn.textContent = 'Nochmal versuchen';
+    noteEl.textContent = Math.round(noteFor(dist, speed, crashed));
+    statusEl.textContent = reason;
+    renderChart(trajSD, actionChartSD, chartWrapSD);
+    renderSpeedChart(trajSD, speedChartSD, speedChartWrapSD);
+    renderDistChart(trajSD, distChartSD, distChartWrapSD);
+  }
+
+  function step() {
+    if (keyUp) lever = Math.min(1, lever + rampRate * dt);
+    if (keyDown) lever = Math.max(-1, lever - rampRate * dt);
+    speed = Math.max(0, speed + lever * maxAccel * dt);
+    // Bei Stillstand hat ein negativer Hebel keine Wirkung mehr (v>=0 ist geclampt) -
+    // die Bremse "loesen" wir hier automatisch, damit Gasgeben ohne Verzoegerung greift.
+    if (speed === 0 && lever < 0) lever = 0;
+    dist -= speed * dt;
+    t += dt;
+    if (dist <= crashDist) { dist = 0; crashed = true; }
+    const p = { t, dist, speed, action: lever };
+    trajSD.push(p);
+    logLineSD(p);
+    return p;
+  }
+
+  function frameSD(now) {
+    if (!running) return;
+    accumulator += (now - lastTime) / 1000;
+    lastTime = now;
+    let p = trajSD[trajSD.length - 1];
+    while (running && accumulator >= dt) {
+      p = step();
+      accumulator -= dt;
+      if (crashed || t >= timeLimit - 1e-9) {
+        renderState(p, crashed);
+        stop(crashed ? 'Crash gegen die Wand!' : 'Zeit abgelaufen.');
+        return;
+      }
+    }
+    renderState(p);
+    rafId = requestAnimationFrame(frameSD);
+  }
+
+  function start() {
+    dist = d0SD; speed = 0; t = 0; lever = 0; crashed = false;
+    keyUp = false; keyDown = false;
+    trajSD = [{ t: 0, dist, speed, action: 0 }];
+    logAreaSD.value = '';
+    chartWrapSD.style.display = 'none';
+    speedChartWrapSD.style.display = 'none';
+    distChartWrapSD.style.display = 'none';
+    noteEl.textContent = '-';
+    statusEl.textContent = 'laeuft ...';
+    startBtn.disabled = true;
+    renderState(trajSD[0]);
+    running = true;
+    lastTime = performance.now();
+    accumulator = 0;
+    rafId = requestAnimationFrame(frameSD);
+  }
+  startBtn.addEventListener('click', start);
+
+  window.addEventListener('keydown', function (e) {
+    if (!running) return;
+    if (e.key === 'ArrowUp') { keyUp = true; e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { keyDown = true; e.preventDefault(); }
+  });
+  window.addEventListener('keyup', function (e) {
+    if (e.key === 'ArrowUp') keyUp = false;
+    else if (e.key === 'ArrowDown') keyDown = false;
+  });
+
+  // Touch/Maus-Pedale fuer Geraete ohne Pfeiltasten (z.B. Handy-Browser).
+  // pointerdown/up/cancel/leave decken sowohl Touch als auch Maus einheitlich ab.
+  function bindPedal(btn, setPressed) {
+    btn.addEventListener('pointerdown', function (e) {
+      if (!running) return;
+      e.preventDefault();
+      try { btn.setPointerCapture(e.pointerId); } catch (err) { /* z.B. synthetischer Pointer ohne aktive Capture-Quelle */ }
+      btn.classList.add('pressed');
+      setPressed(true);
+    });
+    function release(e) {
+      btn.classList.remove('pressed');
+      setPressed(false);
+    }
+    btn.addEventListener('pointerup', release);
+    btn.addEventListener('pointercancel', release);
+    btn.addEventListener('pointerleave', release);
+  }
+  bindPedal(gasBtn, function (v) { keyUp = v; });
+  bindPedal(bremseBtn, function (v) { keyDown = v; });
+
+  sdOnLeave = function () {
+    if (!running) return;
+    running = false;
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = null;
+    keyUp = false; keyDown = false;
+    gasBtn.classList.remove('pressed');
+    bremseBtn.classList.remove('pressed');
+    startBtn.disabled = false;
+    statusEl.textContent = 'abgebrochen (Tab gewechselt)';
+  };
+})();
+</script>
+
+</body>
+</html>
