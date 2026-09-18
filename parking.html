@@ -254,6 +254,60 @@ const dragCoeff = 0.08;
 // (statt Backprop durch viele Schichten) keine Glattheit.
 function hardTanh(x) { return Math.max(-1, Math.min(1, x)); }
 
+// Erster Zeitpunkt, an dem sich Distanz/Geschwindigkeit nicht mehr aendern (Fahrzeug
+// ist -- nachdem es sich bewegt hat -- endgueltig zum Stillstand gekommen). Sowohl bei
+// simulate() (laeuft technisch bis maxT durch) als auch bei einem Self-Drive-Lauf
+// (laeuft bis Handbremse/Zeitlimit/Crash durch) ist das Ende der Trajektorie nicht der
+// relevante Zeitpunkt fuer die Zeitstrafe in noteFor() -- das waere sonst immer
+// (fast) maxT bzw. die Laufzeit bis zum Handbremse-Druck, egal wie fix das Fahrzeug
+// tatsaechlich stand.
+function stopIndexOf(traj) {
+  let hasMoved = false;
+  for (let i = 0; i < traj.length; i++) {
+    if (traj[i].speed > 0.3) hasMoved = true;
+    if (hasMoved && traj[i].speed <= 0.02) return i;
+  }
+  return traj.length - 1;
+}
+function stopTimeOf(traj) { return traj[stopIndexOf(traj)].t; }
+
+// Referenzzeit fuer die Zeitstrafe unten: kuerzeste moegliche Zeit, in der ein
+// Bang-Bang-Manoever (Vollgas, an einem einzigen Zeitpunkt Wechsel auf Vollbremsung)
+// exakt mit v=0 an der Wand ankommt. Numerisch per Bisektion ueber den Wechselzeitpunkt
+// bestimmt statt per geschlossener Formel (2*sqrt(d0/maxAccel)), weil dragCoeff das
+// Optimum leicht verschiebt (siehe Kommentar bei noteFor) -- die geschlossene Formel
+// waere ohne dragCoeff eine leichte Unterschaetzung und wuerde selbst perfektes Fahren
+// bestrafen. Pro Fahrzeugklasse (maxAccel) nur einmal berechnet und gecacht, da sonst
+// jeder einzelne costOf()-Aufruf im Trainings-Suchlauf zusaetzlich ~40 Bisektions-
+// Simulationen mitschleppen wuerde.
+function bangBangFinal(tSwitch, maxAccel) {
+  let dist = d0, speed = 0, t = 0;
+  while (t < maxT - 1e-9) {
+    const action = t < tSwitch ? 1 : -1;
+    speed = Math.max(0, speed + (action * maxAccel - dragCoeff * speed) * dt);
+    dist -= speed * dt;
+    t += dt;
+    if (dist <= 0) return { dist: 0, t, stopped: false };
+    if (speed === 0) return { dist, t, stopped: true };
+  }
+  return { dist, t, stopped: false };
+}
+const minTimeCache = {};
+function minTimeFor(maxAccel) {
+  if (minTimeCache[maxAccel] !== undefined) return minTimeCache[maxAccel];
+  // lo: spaetestens hier ohne Crash zum Stehen gekommen (zu frueh gebremst, Rest-dist
+  // > 0). hi: spaetestens hier gecrasht (zu spaet gebremst). Gesucht ist die Grenze
+  // dazwischen -- der zeit-optimale Wechselzeitpunkt.
+  let lo = 0, hi = maxT;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    const r = bangBangFinal(mid, maxAccel);
+    if (r.stopped && r.dist > 0) lo = mid; else hi = mid;
+  }
+  minTimeCache[maxAccel] = bangBangFinal(lo, maxAccel).t;
+  return minTimeCache[maxAccel];
+}
+
 // Trotz vieler moeglicher (w,b)-Loesungen sieht die Geschwindigkeitskurve
 // nach dem Training immer aehnlich aus (Rampe rauf, Spitze, dann runter):
 // "Vollgas, dann volle Bremsung" ist die kostenoptimale Bang-Bang-Strategie
@@ -263,9 +317,23 @@ function hardTanh(x) { return Math.max(-1, Math.min(1, x)); }
 // dist/d0 = 0.5, mit Widerstand (bremst immer mit) verschiebt er sich etwas
 // nach hinten (~0.42-0.44), weil laenger beschleunigt werden kann, bevor
 // aktiv gebremst werden muss.
-function noteFor(dist, speed, crashed) {
+//
+// timeWeight (Zeitstrafe pro Sekunde^2 ueber der Referenzzeit T_min): experimentell,
+// noch nicht empirisch feinjustiert. Faustregel dahinter: bei den vom Training
+// typischerweise erreichten Endgenauigkeiten (wenige cm) ist dist*dist*1000 schon
+// nahe 0, ein kleiner Zeitueberschuss soll dort trotzdem den Ausschlag geben --
+// gleichzeitig soll die Zeitstrafe bei echten dist-Fehlern (>schon ein paar cm) nicht
+// dominieren. Bei timeWeight=5 entspricht 1s Zeitueberschuss ungefaehr 7cm dist-Fehler
+// (sqrt(5/1000)), 2s ungefaehr 14cm -- spuerbar, aber nicht Genauigkeit ueberstimmend.
+const timeWeight = 5;
+function noteFor(dist, speed, crashed, stopTime, minTime) {
   let note = dist * dist * 1000 + speed * speed * 100;
-  if (crashed) note += 50000 + Math.abs(speed) * 5000;
+  if (crashed) {
+    note += 50000 + Math.abs(speed) * 5000;
+  } else if (stopTime !== undefined && minTime !== undefined) {
+    const excess = Math.max(0, stopTime - minTime);
+    note += excess * excess * timeWeight;
+  }
   // Strafpunkte sind ohnehin eine erfundene Groesse (keine physikalische
   // Einheit) -- x100, damit auch sehr kleine dist/speed-Unterschiede nahe
   // der Wand als ganze Zahl sichtbar bleiben, statt beim Runden auf "0" zu
@@ -290,7 +358,9 @@ function simulate(w, b, d0, maxAccel) {
     traj.push({ t, dist, speed, action });
   }
   const last = traj[traj.length - 1];
-  const note = noteFor(last.dist, last.speed, crashed);
+  const note = crashed
+    ? noteFor(last.dist, last.speed, crashed)
+    : noteFor(last.dist, last.speed, crashed, stopTimeOf(traj), minTimeFor(maxAccel));
   return { traj, note, crashed };
 }
 
@@ -407,6 +477,18 @@ bInput.addEventListener('input', onManualWB);
 // Descent kann in einem mittelmaessigen Crash-Punkt haengen bleiben, obwohl
 // eine bessere Loesung existiert. Die aeussere Schleife im Klick-Handler
 // wiederholt diesen Versuch deshalb mehrfach und behaelt den besten.
+// Kurzbeschreibung, wie die Strafpunkte fuer ein (w,b)-Paar zustande kommen --
+// fuers Trainings-Log, damit "Strafpunkte=19" nicht als Blackbox-Zahl dasteht.
+function outcomeDetail(w, b, d0, maxAccel) {
+  const r = simulate(w, b, d0, maxAccel);
+  const last = r.traj[r.traj.length - 1];
+  if (r.crashed) {
+    return 'Crash bei t=' + last.t.toFixed(1) + 's, v=' + (last.speed * 3.6).toFixed(1) + 'km/h';
+  }
+  const stopT = stopTimeOf(r.traj);
+  return 'dist=' + last.dist.toFixed(2) + 'm, t=' + stopT.toFixed(1) + 's, v=' + Math.round(last.speed * 3.6) + 'km/h';
+}
+
 function runOnce(d0, maxAccel) {
   let bestW = 0.5, bestB = -0.5, bestCost = costOf(bestW, bestB, d0, maxAccel);
   for (let k = 0; k < 60; k++) {
@@ -462,7 +544,7 @@ trainBtn.addEventListener('click', async function () {
   for (let i = 0; i < restarts; i++) {
     const r = runOnce(d0, maxAccelTrain);
     if (!best || r.cost < best.cost) { best = r; bestIndex = i + 1; }
-    logArea.value += 'Restart ' + (i + 1) + '/' + restarts + ':  w=' + r.w.toFixed(3) + '  b=' + r.b.toFixed(2) + '  Strafpunkte=' + Math.round(r.cost) + '\n';
+    logArea.value += 'Restart ' + (i + 1) + '/' + restarts + ':  w=' + r.w.toFixed(3) + '  b=' + r.b.toFixed(2) + '  Strafpunkte=' + Math.round(r.cost) + ' (' + outcomeDetail(r.w, r.b, d0, maxAccelTrain) + ')\n';
     logArea.scrollTop = logArea.scrollHeight;
     await frameDelay(300);
   }
@@ -563,13 +645,7 @@ playBtn.addEventListener('click', function () {
   distChartWrap.style.display = 'none';
   let lastLoggedIdx = -1;
   const r = simulate(w, b, d0, maxAccelTrain);
-  let stopIdx = r.traj.length - 1;
-  let hasMoved = false;
-  for (let i = 0; i < r.traj.length; i++) {
-    if (r.traj[i].speed > 0.3) hasMoved = true;
-    if (hasMoved && r.traj[i].speed <= 0.02) { stopIdx = i; break; }
-  }
-  const traj = r.traj.slice(0, stopIdx + 1);
+  const traj = r.traj.slice(0, stopIndexOf(r.traj) + 1);
   const msPerSimSecond = 400;
   const duration = Math.max(traj[traj.length - 1].t * msPerSimSecond, 400);
   const start = performance.now();
@@ -686,7 +762,9 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     running = false;
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = null;
-    noteEl.textContent = Math.round(noteFor(dist, speed, crashed));
+    noteEl.textContent = Math.round(crashed
+      ? noteFor(dist, speed, crashed)
+      : noteFor(dist, speed, crashed, stopTimeOf(trajSD), minTimeFor(maxAccelSD)));
     statusEl.textContent = reason;
     renderChart(trajSD, actionChartSD, chartWrapSD);
     renderSpeedChart(trajSD, speedChartSD, speedChartWrapSD);
