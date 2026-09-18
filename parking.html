@@ -75,6 +75,10 @@
 
 <div style="display:flex;justify-content:center;align-items:flex-end;gap:24px;margin-bottom:0.5rem" id="gaugeRow">
   <div style="text-align:center">
+    <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz</div>
+    <div style="font-size:18px;font-weight:600" id="distVal">-</div>
+  </div>
+  <div style="text-align:center">
     <svg viewBox="0 0 200 120" style="width:220px;height:auto;border:none;display:block;margin:0 auto">
       <path d="M 25 100 A 75 75 0 0 1 175 100" fill="none" stroke="#e5e5e2" stroke-width="12" stroke-linecap="round"/>
       <line x1="25" y1="100" x2="35" y2="100" stroke="#999" stroke-width="2"/>
@@ -164,6 +168,10 @@
 </svg>
 
 <div style="display:flex;justify-content:center;align-items:flex-end;gap:24px;margin-bottom:0.5rem">
+  <div style="text-align:center">
+    <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz</div>
+    <div style="font-size:18px;font-weight:600" id="distValSD">-</div>
+  </div>
   <div style="text-align:center">
     <svg viewBox="0 0 200 120" style="width:220px;height:auto;border:none;display:block;margin:0 auto">
       <path d="M 25 100 A 75 75 0 0 1 175 100" fill="none" stroke="#e5e5e2" stroke-width="12" stroke-linecap="round"/>
@@ -312,6 +320,11 @@ function updateGauge(speedKmh, needleId = 'needle', speedLabelId = 'speedLabel')
   document.getElementById(speedLabelId).textContent = speedKmh.toFixed(1) + ' km/h';
 }
 updateGauge(0);
+
+function updateDist(dist, labelId = 'distVal') {
+  document.getElementById(labelId).textContent = dist.toFixed(2) + ' m';
+}
+updateDist(d0);
 
 const throttleCenter = 65, throttleHalf = 50;
 function updateThrottle(action, fillId = 'throttleFill', labelId = 'actionLabel') {
@@ -574,6 +587,7 @@ playBtn.addEventListener('click', function () {
     document.getElementById('motion').innerHTML = m;
     updateGauge(p.speed * 3.6);
     updateThrottle(p.action);
+    updateDist(p.dist);
     document.getElementById('readout').textContent =
       't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
     if (idx !== lastLoggedIdx) {
@@ -639,6 +653,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
   placeCar(d0SD, d0SD, 'carSD');
   updateGauge(0, 'needleSD', 'speedLabelSD');
   updateThrottle(0, 'throttleFillSD', 'actionLabelSD');
+  updateDist(d0SD, 'distValSD');
   setCarColor('carSD', '2.0');
 
   carClassBtnsSD.forEach(function (btn) {
@@ -661,6 +676,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     placeCar(p.dist, d0SD, 'carSD', crashedNow);
     updateGauge(p.speed * 3.6, 'needleSD', 'speedLabelSD');
     updateThrottle(p.action, 'throttleFillSD', 'actionLabelSD');
+    updateDist(p.dist, 'distValSD');
     readoutEl.textContent = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
   }
 
