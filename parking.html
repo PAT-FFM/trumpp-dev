@@ -50,7 +50,6 @@
 
 <div class="row">
   <button id="trainBtn">Trainieren</button>
-  <button id="playBtn" disabled>Animation starten</button>
   <span class="lbl" id="status" style="min-width:220px">noch nicht trainiert</span>
 </div>
 
@@ -76,38 +75,41 @@
   </g>
 </svg>
 
-<div style="display:flex;justify-content:center;align-items:flex-end;gap:24px;margin-bottom:0.5rem" id="gaugeRow">
-  <div style="text-align:center">
-    <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz</div>
-    <div style="font-size:18px;font-weight:600" id="distVal">-</div>
-  </div>
-  <div style="text-align:center">
-    <svg viewBox="0 0 200 120" style="width:220px;height:auto;border:none;display:block;margin:0 auto">
-      <path d="M 25 100 A 75 75 0 0 1 175 100" fill="none" stroke="#e5e5e2" stroke-width="12" stroke-linecap="round"/>
-      <line x1="25" y1="100" x2="35" y2="100" stroke="#999" stroke-width="2"/>
-      <line x1="100" y1="25" x2="100" y2="35" stroke="#999" stroke-width="2"/>
-      <line x1="175" y1="100" x2="165" y2="100" stroke="#999" stroke-width="2"/>
-      <text x="25" y="115" text-anchor="middle" font-size="11" fill="#555">0</text>
-      <text x="100" y="18" text-anchor="middle" font-size="11" fill="#555">20</text>
-      <text x="175" y="115" text-anchor="middle" font-size="11" fill="#555">40</text>
-      <g id="needle" transform="rotate(-90 100 100)">
-        <line x1="100" y1="100" x2="100" y2="38" stroke="#D85A30" stroke-width="4" stroke-linecap="round"/>
-      </g>
-      <circle cx="100" cy="100" r="8" fill="#D85A30"/>
-      <circle cx="100" cy="100" r="3" fill="#fff"/>
-    </svg>
-    <div style="font-size:14px;font-weight:600" id="speedLabel">0.0 km/h</div>
-  </div>
-  <div style="text-align:center">
-    <div style="font-size:12px;color:#555;margin-bottom:2px">Gas / Bremse</div>
-    <svg viewBox="0 0 60 130" style="width:56px;height:126px;border:none;display:block;margin:0 auto">
-      <text x="30" y="10" text-anchor="middle" font-size="11" fill="#555">1</text>
-      <rect x="20" y="15" width="20" height="100" fill="#f2f2f0" stroke="#ccc" stroke-width="1"/>
-      <rect id="throttleFill" x="20" y="65" width="20" height="0" fill="#3B6D11"/>
-      <line x1="14" y1="65" x2="46" y2="65" stroke="#999" stroke-width="1.5"/>
-      <text x="30" y="127" text-anchor="middle" font-size="11" fill="#555">-1</text>
-    </svg>
-    <div style="font-size:14px;font-weight:600" id="actionLabel">0.00</div>
+<div style="position:relative;margin-bottom:0.5rem" id="gaugeRow">
+  <button id="playBtn" disabled style="position:absolute;left:0;top:50%;transform:translateY(-50%);padding:10px 14px;max-width:110px">Animation starten</button>
+  <div style="display:flex;justify-content:center;align-items:flex-end;gap:24px">
+    <div style="text-align:center">
+      <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz</div>
+      <div style="font-size:18px;font-weight:600" id="distVal">-</div>
+    </div>
+    <div style="text-align:center">
+      <svg viewBox="0 0 200 120" style="width:220px;height:auto;border:none;display:block;margin:0 auto">
+        <path d="M 25 100 A 75 75 0 0 1 175 100" fill="none" stroke="#e5e5e2" stroke-width="12" stroke-linecap="round"/>
+        <line x1="25" y1="100" x2="35" y2="100" stroke="#999" stroke-width="2"/>
+        <line x1="100" y1="25" x2="100" y2="35" stroke="#999" stroke-width="2"/>
+        <line x1="175" y1="100" x2="165" y2="100" stroke="#999" stroke-width="2"/>
+        <text x="25" y="115" text-anchor="middle" font-size="11" fill="#555">0</text>
+        <text x="100" y="18" text-anchor="middle" font-size="11" fill="#555">20</text>
+        <text x="175" y="115" text-anchor="middle" font-size="11" fill="#555">40</text>
+        <g id="needle" transform="rotate(-90 100 100)">
+          <line x1="100" y1="100" x2="100" y2="38" stroke="#D85A30" stroke-width="4" stroke-linecap="round"/>
+        </g>
+        <circle cx="100" cy="100" r="8" fill="#D85A30"/>
+        <circle cx="100" cy="100" r="3" fill="#fff"/>
+      </svg>
+      <div style="font-size:14px;font-weight:600" id="speedLabel">0.0 km/h</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:12px;color:#555;margin-bottom:2px">Gas / Bremse</div>
+      <svg viewBox="0 0 60 130" style="width:56px;height:126px;border:none;display:block;margin:0 auto">
+        <text x="30" y="10" text-anchor="middle" font-size="11" fill="#555">1</text>
+        <rect x="20" y="15" width="20" height="100" fill="#f2f2f0" stroke="#ccc" stroke-width="1"/>
+        <rect id="throttleFill" x="20" y="65" width="20" height="0" fill="#3B6D11"/>
+        <line x1="14" y1="65" x2="46" y2="65" stroke="#999" stroke-width="1.5"/>
+        <text x="30" y="127" text-anchor="middle" font-size="11" fill="#555">-1</text>
+      </svg>
+      <div style="font-size:14px;font-weight:600" id="actionLabel">0.00</div>
+    </div>
   </div>
 </div>
 
@@ -482,7 +484,7 @@ trainBtn.addEventListener('click', async function () {
   wInput.disabled = false;
   bInput.disabled = false;
   carClassBtnsTrain.forEach(b => b.disabled = false);
-  gaugeRow.style.display = 'flex';
+  gaugeRow.style.display = 'block';
   playBtn.hidden = false;
   updatePlayEnabled();
 });
