@@ -646,7 +646,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
   const d0SD = 20.0;
 
   let maxAccelSD = 2.0;
-  let dist, speed, t, lever, crashed;
+  let dist, speed, t, lever, crashed, handbrake;
   let running = false;
   let keyUp = false, keyDown = false;
   let trajSD = [];
@@ -718,9 +718,9 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     while (running && accumulator >= dt) {
       p = step();
       accumulator -= dt;
-      if (crashed || t >= timeLimit - 1e-9) {
+      if (crashed || handbrake || t >= timeLimit - 1e-9) {
         renderState(p, crashed);
-        stop(crashed ? 'Crash gegen die Wand!' : 'Zeit abgelaufen.');
+        stop(crashed ? 'Crash gegen die Wand!' : (handbrake ? 'Lauf beendet (Handbremse).' : 'Zeit abgelaufen.'));
         return;
       }
     }
@@ -729,7 +729,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
   }
 
   function start() {
-    dist = d0SD; speed = 0; t = 0; lever = 0; crashed = false;
+    dist = d0SD; speed = 0; t = 0; lever = 0; crashed = false; handbrake = false;
     keyUp = false; keyDown = false;
     trajSD = [{ t: 0, dist, speed, action: 0 }];
     logAreaSD.value = '';
@@ -756,7 +756,17 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
       gasBtn.classList.add('pressed');
       e.preventDefault();
     } else if (e.key === 'ArrowDown') {
-      if (running) { keyDown = true; bremseBtn.classList.add('pressed'); e.preventDefault(); }
+      if (running) {
+        // Erneuter (nicht gehaltener) Bremsdruck bei bereits stehendem Fahrzeug =
+        // "Handbremse": Signal, dass das aktuelle Ergebnis akzeptiert wird, statt die
+        // restliche Zeit auslaufen zu lassen. Durchgehendes Halten der Bremse bis zum
+        // Stillstand (die uebliche Anhalte-Technik) loest das bewusst nicht aus, sonst
+        // koennte man nach dem Anhalten nicht mehr mit kurzen Gas-Tipps nachjustieren.
+        if (!keyDown && speed === 0) handbrake = true;
+        keyDown = true;
+        bremseBtn.classList.add('pressed');
+        e.preventDefault();
+      }
     }
   });
   window.addEventListener('keyup', function (e) {
@@ -787,6 +797,11 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
   }
   bindPedal(gasBtn, function (v) { keyUp = v; }, true);
   bindPedal(bremseBtn, function (v) { keyDown = v; }, false);
+  // pointerdown ist bei Touch/Maus immer ein frischer Tastendruck (kein Auto-Repeat
+  // wie bei der Tastatur), entspricht also direkt dem Handbremse-Signal oben.
+  bremseBtn.addEventListener('pointerdown', function () {
+    if (running && speed === 0) handbrake = true;
+  });
 
   sdOnLeave = function () {
     if (!running) return;
