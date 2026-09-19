@@ -193,6 +193,13 @@ The edge functions and worker expect these tables/RPCs:
 Unlinked teaching demo, not a general trumpp.dev feature and not linked from anywhere —
 same posture as `/location`, except it is deliberately left out of `robots.txt` too.
 
+**No measured values in this section, on purpose.** Every figure that came out of a
+sample had to be corrected again whenever the physics, the loss or the optimizer moved,
+and a stale number in a design document is worse than no number. What stays are
+constants that are *set* in the code — search space, canvas sizes, limits — because
+those are the specification rather than a result. Anything empirical belongs in
+`scripts/parking-selftest.js`, which reproduces it on demand.
+
 ### What it shows
 
 A **single neuron with two parameters** drives a car from 20 m toward a wall:
@@ -203,8 +210,10 @@ training tab, and a Self-Drive tab where a human drives the same simulation by h
 Be honest about what this is when extending it: **there is one deterministic scenario,
 so this is parameter optimization, not learning.** There is no data set, no train/test
 split and nothing to generalize to — what gets "learned" is effectively one number, the
-switch point `-b/w` (which settles at ≈0.42 for every car class and loss function,
-wherever the activation saturates — see the note on the cliff's bend below).
+switch point `-b/w`. It settles at the same value for every car class and every loss
+function wherever the activation saturates: a little below half the start distance,
+since drag brakes throughout and lets the car accelerate longer than a symmetric
+accelerate/brake pair would (see the note on the cliff's bend below).
 Likewise, `runOnce()` is *not* gradient descent despite what it optimizes: it takes a
 finite-difference gradient and then throws away the magnitude via `Math.sign()`, with a
 fixed decaying step and no learning rate. That is a deliberate choice — the environment
@@ -215,71 +224,63 @@ not label it backpropagation in user-facing text.
 
 - **The loss landscape is exact, not illustrative.** Because there are only two
   parameters, `parking.html` computes the entire cost surface (160×100 grid per view)
-  and draws it. It splits into three sharply separated regions, measured for
-  Mittelklasse: **50.3 %** "never starts moving" (where the penalty is *bit-for-bit
-  identical* everywhere, so the finite-difference gradient is exactly 0 and the
-  sign-descent freezes), **40.7 %** crash, and only **8.9 %** usable. Colored by
-  *rank*, not by value — within the usable region the costs span 6.4 orders of
-  magnitude, and even a log ramp would leave 99.6 % of it looking white. The ranking
-  is redone per view, so the same colour means different things in different panels.
-  The ramp (`LS_RAMPE` / `lsRamp`) runs over four stops, navy → blue → teal → pale
-  sage, not a straight interpolation between two blues: rank colouring always uses the
-  ramp's full extent, so that extent is the only thing that makes differences visible.
-  Lightness rises monotonically across the stops, so it still reads as an ordered scale;
-  the light end stays greenish rather than near-white so the border against the grey
-  "never starts" region remains visible.
+  and draws it. It splits into three sharply separated regions: "never starts moving"
+  (where the penalty is *bit-for-bit identical* everywhere, so the finite-difference
+  gradient is exactly 0 and the sign-descent freezes), crash, and a usable band that is
+  by far the smallest of the three. Colored by *rank*, not by value — within the usable
+  region the costs span many orders of magnitude, and even a log ramp would leave nearly
+  all of it looking white. The ranking is redone per view, so the same colour means
+  different things in different panels. The ramp (`LS_RAMPE` / `lsRamp`) runs over four
+  stops, navy → blue → teal → pale sage, not a straight interpolation between two blues:
+  rank colouring always uses the ramp's full extent, so that extent is the only thing
+  that makes differences visible. Lightness rises monotonically across the stops, so it
+  still reads as an ordered scale; the light end stays greenish rather than near-white so
+  the border against the grey "never starts" region remains visible.
 - **Three zoom levels, collapsed by default.** The landscape sits in a `<details>` that
-  starts closed, and nothing is computed until it is opened (~250 ms for all three).
-  Open by default it dominated the page — people looked at it instead of the neuron.
-  The views are: the whole search space; w (−1, 6) × b (−3, 2) for the valley; and a
-  window cropped to the taken run itself (`fitViewTo`), recomputed **after** a training
-  finishes, not after each restart (its frame would otherwise jump five times
-  mid-animation). Before the first training it falls back to a ±0.5 / ±0.3 window on
-  the cliff at w = 5, found by bisection (`cliffBAt`); the cliff position depends only
-  on w and `maxAccel`, never on the loss function, since `crashed` is a property of the
-  simulation, not the scoring.
-- **The cropped view keeps the whole run and adds nothing around it.** Its window is
-  the bounding box of the taken restart's path plus a 6 % margin, so its start marker
-  and its best point are inside by construction. That run is compact (measured median
-  0.63 × 0.25) because the restart that wins is the one whose random start already sat
-  close; the far-flung starts belong to the losers. Rather than inflating the window to
-  a fixed aspect ratio (median 1.41×, worst case 3.85× the area) **the canvas height
-  follows the window**, clamped to 220–560 px — nothing is distorted and nothing added.
-  Only when the height would leave those bounds is the window widened in the short
-  direction, which affects about a fifth of runs, median factor 1.00. Assigning
+  starts closed, and nothing is computed until it is opened. Open by default it dominated
+  the page — people looked at it instead of the neuron. The views are: the whole search
+  space; w (−1, 6) × b (−3, 2) for the valley; and a window cropped to the taken run
+  itself (`fitViewTo`), recomputed **after** a training finishes, not after each restart
+  (its frame would otherwise jump five times mid-animation). Before the first training it
+  falls back to a ±0.5 / ±0.3 window on the cliff at w = 5, found by bisection
+  (`cliffBAt`); the cliff position depends only on w and `maxAccel`, never on the loss
+  function, since `crashed` is a property of the simulation, not the scoring.
+- **The cropped view keeps the whole run and adds nothing around it.** Its window is the
+  bounding box of the taken restart's path plus a 6 % margin, so its start marker and its
+  best point are inside by construction. That run is compact because the restart that
+  wins is the one whose random start already sat close; the far-flung starts belong to
+  the losers. Rather than inflating the window to a fixed aspect ratio **the canvas
+  height follows the window**, clamped to 220–560 px — nothing is distorted and nothing
+  added. Only when the height would leave those bounds is the window widened in the short
+  direction, which affects a minority of runs and barely changes them. Assigning
   `canvas.height` resets the context, so it happens before anything is drawn.
-- **The cliff is only a straight ray where the neuron saturates.** For w ≳ 1.5 it lies
-  on `-b/w ≈ 0.42` (measured 0.418–0.428 from w = 1.5 to 6): the action is +1 far out
-  and −1 close in, so only the switch point matters, not the size of w and b. Below
-  that it bends away visibly and crosses b = 0 near w ≈ 0.6 (measured: w = 1 → 0.401,
-  w = 0.5 → 0.234, w = 0.25 → −0.242, w = 0 → the cliff sits at b = +0.25). At small w
-  nothing saturates, the action is a shallow ramp and at w = 0 a constant, so what
-  decides is no longer braking distance but whether the 10 s budget even reaches the
-  wall. For w ≲ −3 there is no cliff at all, because `w + b ≤ 0` means the car never
-  starts. Do not restate the ray relation without that qualification — an earlier
+- **The cliff is only a straight ray where the neuron saturates.** Above a modest w it
+  lies on a constant `-b/w`: the action is +1 far out and −1 close in, so only the switch
+  point matters, not the size of w and b. Below that it bends away visibly and crosses
+  b = 0 at a small positive w; at w = 0 it sits at positive b. At small w nothing
+  saturates, the action is a shallow ramp and at w = 0 a constant, so what decides is no
+  longer braking distance but whether the 10 s budget even reaches the wall. At
+  sufficiently negative w there is no cliff at all, because `w + b ≤ 0` means the car
+  never starts. Do not restate the ray relation without that qualification — an earlier
   caption did and it is plainly contradicted by the picture.
-- **Only the closest view makes the argument.** At w = 5 one grid step in b (0.006)
-  moves the penalty from **130** to **52,130,750** — while the approach is perfectly
-  smooth (… 7,420 → 2,400 → 130). That is what separates a discontinuity from a steep
-  slope, and it is invisible at the two wider zoom levels. (These are the ×1000-scaled
-  penalty values from `noteFor()`; an earlier ×100 scaling is why older notes/logs may
-  show these ten times smaller.)
+- **Only the closest view makes the argument.** At the cliff a single grid step in b
+  moves the penalty from a handful of points to tens of millions, while the approach to
+  that step is perfectly smooth. That is what separates a discontinuity from a steep
+  slope, and it is invisible at the two wider zoom levels.
 - **Restarts that reach the edge of the search space are discarded and redrawn**
   (`runOnceImInneren` in `parking.html`, max 10 attempts). This is a deliberate
   presentation choice, not part of the method, and it is the one place where the demo
-  shows something other than what the algorithm did. The reason: `wMax = 6` is an
-  arbitrary number, not part of the task, and a path pressing itself flat against that
-  wall teaches something about our box instead of about learning. It happens at all
-  because cost falls monotonically along the valley toward larger w — there is no
-  interior minimum in w, the optimum would be at infinity.
-  Measured cost: 22 % of attempts are affected (via `wMax` alone; `wMin`, `bMin` and
-  `bMax` were never touched in 1600 runs), so ~1.3 attempts per restart, invisible
-  next to the 5 × 300 ms display pauses. The discarded runs are in fact the *better*
-  ones (median 100 vs 150 penalty points on "Kombiniert"), but both stop 1 cm from the
-  wall at the reference time — the difference is cosmetic, the driving identical.
-  It lives in `parking.html`, not in `runOnce`, so `scripts/parking-selftest.js` keeps
-  measuring the unfiltered algorithm; otherwise the documented numbers would drift
-  away from reality. The caption under the legend states that runs are redrawn.
+  shows something other than what the algorithm did. The reason: `wMax` is an arbitrary
+  number, not part of the task, and a path pressing itself flat against that wall teaches
+  something about our box instead of about learning. It happens at all because cost falls
+  monotonically along the valley toward larger w — there is no interior minimum in w, the
+  optimum would be at infinity. In practice only `wMax` is ever reached; `wMin`, `bMin`
+  and `bMax` are not. The retries cost a fraction of an extra attempt per restart,
+  invisible next to the display pauses between them. The discarded runs are in fact the
+  *better* ones on the penalty score, but they stop at the same distance from the wall at
+  the same time — the difference is cosmetic, the driving identical. It lives in
+  `parking.html`, not in `runOnce`, so `scripts/parking-selftest.js` keeps measuring the
+  unfiltered algorithm. The caption under the legend states that runs are redrawn.
 - **The cliff view is not clipped to the search space.** A dashed "Suchraumgrenze" line
   marks `wMax` whenever the window happens to include it — rare now that edge runs are
   discarded, but still honest about where the optimizer may go.
@@ -288,26 +289,30 @@ not label it backpropagation in user-facing text.
   marks and the overall course is what matters. In the cliff view a line is actively
   misleading: people read it as a route the optimizer travels along and checks as it
   goes, and then its behaviour looks irrational ("why didn't it turn earlier on the way
-  to the cliff?"). It never travels: it jumps, and evaluates only where it lands. The probe
-  reaches exactly one step (`eps = stepW`), while one diagonal step toward the cliff
-  closes **1.42** step-lengths of distance (the cliff slopes at −0.41, so raising b by
-  s *and* raising w lowers the cliff by 0.41 s). It is therefore structurally unable to
-  see the cliff before the jump that lands it right beside it — hence the two-cycle
-  where the gap alternates between roughly 0.03 and 1.45 step-lengths.
+  to the cliff?"). It never travels: it jumps, and evaluates only where it lands. The
+  probe reaches exactly one step (`eps` follows `stepW`), while one diagonal step toward
+  the cliff closes more than a full step-length of the distance to it, because the cliff
+  itself slopes. It is therefore structurally unable to see the cliff before the jump
+  that lands it right beside it — hence the two-cycle the run ends in.
   Hit points for the tooltip are collected on all three maps regardless of style, so a
   point can be queried along the line too.
   Crosses are thinned through an occupancy grid, not against the previously drawn one:
   the path oscillates, so point n+2 lands back on point n while n+1 was far away, and a
   predecessor check lets every point through and smears the dense regions into blobs.
-- **Most of a run contributes nothing, and the tooltip says so.** `runOnce` returns
-  `bestStep`, the iteration its best value was found at — median **254 of 350**
-  (range 168–292), so about 96 further iterations produce nothing better. The result
-  tooltip prints it, because otherwise the display gives no hint that the run was long
-  since finished. This is also why a fourth, deeper map over "the last 50 iterations"
-  was considered and rejected: the result marker is never in it (it lies ~100
-  iterations earlier), the extent is 0.001–0.01, and in ~10 % of runs w is pinned at
-  the clamp so it degenerates into a vertical row of dots. "Nothing happens any more"
-  is a statement about time, and the maps are about place.
+- **The run ends by circling, not by converging, and the tooltip says so.** `runOnce`
+  returns `bestStep`, the iteration its best value was found at, and the result tooltip
+  prints it. That iteration typically falls well before the last one, and this is not a
+  defect to be tuned away. Sign-descent throws the gradient's magnitude away, so close to
+  the optimum it cannot take a small step — it takes the scheduled one and overshoots.
+  The run therefore ends in a clean two-cycle straddling the crash cliff, one phase
+  crashing and one not, and the returned best is simply the closest landing on the safe
+  side: a lucky landing, not the end of a descent. Lengthening the run does not move the
+  result, because the extra iterations land in the same cycle. Without the printed
+  iteration the display gives no hint of any of this. It is also why a fourth, deeper map
+  over "the last iterations" was considered and rejected: the result marker is not in it,
+  the extent is vanishingly small, and whenever w sits pinned at the clamp it degenerates
+  into a vertical row of dots. "Nothing happens any more" is a statement about time, and
+  the maps are about place.
 - **Hovering or holding a point shows its values** (`lsHit` / `lsTooltip`): restart
   number, iteration, w, b and the penalty score, computed on demand. A canvas has no
   child elements and therefore no native `title`, so hits are tested by hand against
@@ -321,23 +326,42 @@ not label it backpropagation in user-facing text.
   multiplied by `canvas.width / displayedWidth`, and a debounced `resize` listener
   redraws (the grid images are cached, so only the drawing repeats).
 - **The Bang-Bang reference time (`minTimeFor`) applies its switch fractionally**
-  inside the affected step. Rounding it to the `dt` grid used to make the reference
-  maneuver stop 0.72 m short of the wall for Mittelklasse and report 6.3 s instead of
-  6.4 s — roughly half of the time penalty shown to the user was a rounding artifact.
+  inside the affected step. Rounded to the `dt` grid instead, the reference maneuver
+  stopped short of the wall — it did not actually solve the task — and reported a
+  reference time that was too optimistic, so a good part of the time penalty shown to the
+  user was a rounding artifact.
 - **`crashW` per loss variant.** The crash penalty is built from absolute constants
   (`50000 + |v|·5000`), so scaling a variant's other weights does not scale it.
-  Without `crashW`, "Starke Zeitstrafe" was ~100× more crash-averse than "Kombiniert"
-  rather than merely stricter about time.
-- **`eps` follows the step size in `runOnce()`.** With a fixed `eps`, the step fell
-  below the probing resolution after iteration 126 of 350 — the last two thirds of
-  every run did nothing but cost four simulations each.
+  Without `crashW`, "Starke Zeitstrafe" was not merely stricter about time but far more
+  crash-averse than "Kombiniert", which confounded any comparison between the variants.
+- **`eps` in `runOnce()` is a detection radius, not a numerical epsilon.** It sets how
+  far the finite difference reaches, and with it whether the crash cliff is visible at
+  all. If the two probe points straddle the cliff, the gradient reports the drop and the
+  descent is pushed away from it; if both land on the same side, it measures the slope
+  *inside* the crash penalty and points somewhere else entirely. The closest the run can
+  settle to the cliff is therefore roughly `eps` itself — which is why `eps` follows
+  `stepW` rather than staying fixed: with a fixed `eps` the run stopped improving while a
+  large part of it was still to come. The lower bound is a guard for the case that
+  `totalSteps` is raised, and is set below anything the current schedule reaches. Keep it
+  that way: a bound that actually binds does not protect anything, it only moves the
+  point at which the run falls asleep. Floating-point resolution is not the limit here —
+  the difference quotient stays stable far below the bound.
+- **The trained result reaches the input fields exactly, not rounded** (`String(best.w)`
+  rather than a fixed number of decimals). The fields are what the animation actually
+  drives, and the crash cliff is narrower than any fixed decimal place: a rounded result
+  would crash while the penalty score shown next to it — belonging to the unrounded
+  value — was in the single digits. `String()` yields the shortest text that parses back
+  to the identical double, so "what the field shows is what runs" holds literally, with
+  no guessed precision that goes stale the next time the optimizer is touched. The fields
+  are sized for a fully written-out double. Log output and the landscape tooltip still
+  round, because they are display only and drive nothing.
 - **No penalty score in the Self-Drive tab.** A manual run is not comparable to a
   trained one (15 s limit instead of 10 s, and the loss picked in the training tab does
   not apply there). The charts stay, because they describe the run instead of scoring it.
-- **The loss variants barely differ in outcome** (measured across 30 trainings each:
-  6.40–6.50 s, all within a centimetre). The task has essentially one good solution, so
-  no weighting can produce visibly different driving. The landscape is where the
-  difference actually shows.
+- **The loss variants barely differ in outcome.** Whichever is picked, the car stops at
+  essentially the same place at essentially the same time. The task has one good
+  solution, so no weighting can produce visibly different driving. The landscape is where
+  the difference actually shows.
 
 ## Feature: Location Tracker
 

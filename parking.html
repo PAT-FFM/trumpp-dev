@@ -100,10 +100,10 @@
 <textarea id="logAreaTrace" readonly rows="10" style="display:block;width:100%;box-sizing:border-box;margin-bottom:0.9rem;font-family:monospace;font-size:12px;resize:vertical;overflow-y:auto"></textarea>
 
 <div class="row">
-  <div class="box"><div class="lbl2">Gewicht w</div><input type="number" step="any" class="val" id="wVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
-  <div class="box"><div class="lbl2">Schwelle b</div><input type="number" step="any" class="val" id="bVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
+  <div class="box"><div class="lbl2">Gewicht w</div><input type="number" step="any" class="val" id="wVal" placeholder="-" style="width:140px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:13px;font-weight:600;background:#fff"></div>
+  <div class="box"><div class="lbl2">Schwelle b</div><input type="number" step="any" class="val" id="bVal" placeholder="-" style="width:140px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:13px;font-weight:600;background:#fff"></div>
   <div class="box"><div class="lbl2">Strafpunkte</div><div class="val" id="noteVal">-</div></div>
-  <span id="lossFormulaCaption" style="font-size:11px;color:#888;max-width:220px"></span>
+  <span id="lossFormulaCaption" style="font-size:10px;color:#888;max-width:220px"></span>
 </div>
 
 <svg viewBox="0 0 680 140">
@@ -648,12 +648,18 @@ trainBtn.addEventListener('click', async function () {
 
   logNeuronTrace(best.w, best.b, d0, maxAccelTrain, loss, logAreaTrace);
 
-  // Hohe Praezision hier, nicht nur kosmetisch gerundet: das System reagiert
-  // nahe der Crash-Schwelle empfindlich auf kleine w/b-Aenderungen (siehe
-  // Kommentar bei runOnce), und die Eingabefelder sind jetzt die tatsaechlich
-  // fuer die Animation verwendeten Werte, nicht nur eine Anzeige.
-  wInput.value = best.w.toFixed(5);
-  bInput.value = best.b.toFixed(5);
+  // Exakt statt gerundet, und das ist kein Detail: die Eingabefelder sind die
+  // tatsaechlich fuer die Animation verwendeten Werte, und die Crash-Kante ist
+  // schmaler als jede feste Stellenzahl. Auf 5 Stellen gerundet crashte das
+  // Ergebnis in einem guten Zehntel der Faelle, waehrend daneben eine einstellige
+  // Strafpunktzahl stand -- die gehoerte zum ungerundeten Wert. String() liefert
+  // die kuerzeste Zeichenkette, die exakt auf denselben double zurueckfuehrt;
+  // "was im Feld steht, faehrt auch" gilt damit woertlich, ohne eine geratene
+  // Stellenzahl, die nach dem naechsten Eingriff am Optimizer wieder zu knapp
+  // waere. Die Felder sind dafuer breiter und kleiner gesetzt. Log und Tooltip
+  // runden weiterhin auf 5 Stellen -- die sind reine Anzeige und fahren nichts.
+  wInput.value = String(best.w);
+  bInput.value = String(best.b);
   noteVal.textContent = Math.round(best.cost);
   trainedAccel = maxAccelTrain;
   trainedLabel = activeCarClassBtn().textContent;
@@ -1198,9 +1204,11 @@ function lsTooltipText(p) {
   const kopf = p.kind === 'start'
     ? 'Restart ' + (p.run + 1) + ' · Startwert aus der Zufallssuche'
     : p.kind === 'best'
-      // Die Iteration steht bewusst dabei: der Bestwert faellt im Median schon bei
-      // Schritt 254 von 350, die restlichen rund 96 Iterationen bringen nichts mehr.
-      // Ohne die Zahl sieht man der Anzeige nicht an, dass der Lauf laengst fertig war.
+      // Die Iteration steht bewusst dabei: der Bestwert faellt typischerweise vor dem
+      // Ende des Laufs, weil der Abstieg zuletzt nur noch um die Crash-Kante pendelt
+      // und der Bestwert die knappste Landung dieses Pendelns ist -- kein Ergebnis
+      // einer Konvergenz. Ohne die Zahl sieht man der Anzeige nicht an, dass der
+      // Rest des Laufs nichts mehr beigetragen hat.
       ? 'Restart ' + (p.run + 1) + ' · übernommenes Ergebnis\ngefunden bei Schritt '
         + p.step + ' von ' + (p.total - 1)
       : 'Restart ' + (p.run + 1) + ' · Schritt ' + p.step + ' von ' + (p.total - 1);

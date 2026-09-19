@@ -257,12 +257,24 @@ function runOnce(startDist, maxAccel, loss) {
   let stepW = 0.25, stepB = 0.25;
   const totalSteps = 350;
   for (let step = 0; step < totalSteps; step++) {
-    // eps folgt der Schrittweite, statt fest zu bleiben: bei festem eps=0.02 war der
-    // Schritt ab Iteration 126 von 350 kleiner als die Aufloesung, mit der der
-    // Differenzenquotient die Kostenflaeche ueberhaupt abtastet -- die letzten knapp
-    // zwei Drittel des Laufs bewegten praktisch nichts mehr, kosteten aber je vier
-    // vollstaendige Simulationen.
-    const eps = Math.max(1e-3, stepW);
+    // eps ist hier kein numerischer Epsilon-Wert, sondern der Radius, in dem der
+    // Differenzenquotient die Crash-Kante ueberhaupt bemerkt. Reicht der Tastpunkt
+    // ueber die Kante, meldet der Gradient den Abgrund und der Abstieg wird von ihr
+    // weggestossen; liegen beide Tastpunkte auf derselben Seite, misst er das
+    // Gefaelle *innerhalb* der Crash-Strafe und zeigt woanders hin. Die erreichbare
+    // Naehe zur Kante ist damit ungefaehr eps selbst -- eps muss deshalb mit der
+    // Schrittweite mitschrumpfen, sonst hoert der Lauf auf besser zu werden, lange
+    // bevor er durch ist. Mit dem frueheren festen eps war davon rund ein Drittel
+    // des Laufs betroffen, mit einer zu hoch angesetzten Untergrenze das letzte
+    // Viertel.
+    //
+    // Die Untergrenze ist reiner Schutz fuer den Fall, dass jemand totalSteps
+    // erhoeht; bei der aktuellen Schrittfolge greift sie nie, und genau so soll es
+    // sein. Sie liegt knapp oberhalb der Breite der Crash-Kante: darunter liegen
+    // beide Tastpunkte innerhalb der Crash-Region und der Gradient wird
+    // bedeutungslos. Die Fliesskomma-Aufloesung ist dabei nicht die Grenze -- der
+    // Quotient bleibt noch weit darunter stabil.
+    const eps = Math.max(1e-4, stepW);
     const cw = (costOf(w + eps, b, startDist, maxAccel, loss) - costOf(w - eps, b, startDist, maxAccel, loss)) / (2 * eps);
     const cb = (costOf(w, b + eps, startDist, maxAccel, loss) - costOf(w, b - eps, startDist, maxAccel, loss)) / (2 * eps);
     w -= Math.sign(cw) * stepW;
