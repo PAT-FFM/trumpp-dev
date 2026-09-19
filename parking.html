@@ -519,9 +519,16 @@ function updateLossCaption() {
   const terms = [];
   if (loss.distW) terms.push('dist²·' + loss.distW);
   if (loss.speedW) terms.push('v²·' + loss.speedW);
-  if (loss.timeW) terms.push('Δt²·' + loss.timeW);
+  // Δt-Erklaerung (inkl. konkretem Vorgabewert fuer die aktuelle Fahrzeugklasse) nur
+  // zeigen, wenn die Formel ueberhaupt einen Δt-Term enthaelt -- sonst stuende ein
+  // erklaertes Symbol da, das gar nicht vorkommt.
+  let regulaerLabel = 'regulär';
+  if (loss.timeW) {
+    terms.push('Δt²·' + loss.timeW);
+    regulaerLabel += ' (Δt := Zeit über Vorgabe von ' + minTimeFor(maxAccelTrain).toFixed(1) + 's)';
+  }
   lossFormulaCaption.innerHTML =
-    'regulär (Δt := Zeit über Vorgabe):<br>(' + terms.join(' + ') + ') · 100<br>' +
+    regulaerLabel + ':<br>(' + terms.join(' + ') + ') · 100<br>' +
     'bei Crash:<br>(v²·' + loss.speedW + ' + 50000 + |v|·5000) · 100';
 }
 updateLossCaption();
@@ -532,6 +539,7 @@ carClassBtnsTrain.forEach(function (btn) {
     btn.classList.add('active');
     maxAccelTrain = +btn.dataset.accel;
     setCarColor('car', btn.dataset.accel);
+    updateLossCaption();
     checkTrainingStatus();
   });
 });
@@ -580,10 +588,10 @@ function outcomeDetail(w, b, d0, maxAccel, loss) {
   const r = simulate(w, b, d0, maxAccel, loss);
   const last = r.traj[r.traj.length - 1];
   if (r.crashed) {
-    return 'Crash bei t=' + last.t.toFixed(1) + 's, v=' + (last.speed * 3.6).toFixed(1) + 'km/h';
+    return 'Crash bei t=' + last.t.toFixed(1) + 's, v=' + (last.speed * 3.6).toFixed(3) + 'km/h';
   }
   const stopT = stopTimeOf(r.traj);
-  return 'dist=' + last.dist.toFixed(3) + 'm, t=' + stopT.toFixed(1) + 's, v=' + Math.round(last.speed * 3.6) + 'km/h';
+  return 'dist=' + last.dist.toFixed(3) + 'm, t=' + stopT.toFixed(1) + 's, v=' + (last.speed * 3.6).toFixed(3) + 'km/h';
 }
 
 // Detaillierte Log-Ausgabe der Neuron-Rechenkette (dist -> ×w' -> +b -> hardTanh ->
@@ -628,13 +636,13 @@ function logNeuronTrace(w, b, d0, maxAccel, lossLabel, logAreaEl) {
     '  Aktivierung: act(x) = hardTanh(x) = max(-1, min(1, x))\n';
   trimmed.forEach(function (s, i) {
     const sign = s.action >= 0 ? '+' : '';
-    const vKmh = (s.vBefore * 3.6).toFixed(1);
-    const vAfterKmh = (s.vAfter * 3.6).toFixed(1);
+    const vKmh = (s.vBefore * 3.6).toFixed(3);
+    const vAfterKmh = (s.vAfter * 3.6).toFixed(3);
     logAreaEl.value +=
-      '\n  Schritt ' + i + ' (t=' + s.t.toFixed(1) + 's, dist=' + s.distBefore.toFixed(3) + 'm, v=' + s.vBefore.toFixed(2) + 'm/s (' + vKmh + 'km/h)):\n' +
+      '\n  Schritt ' + i + ' (t=' + s.t.toFixed(1) + 's, dist=' + s.distBefore.toFixed(3) + 'm, v=' + s.vBefore.toFixed(3) + 'm/s (' + vKmh + 'km/h)):\n' +
       '    z = w\'*dist+b = ' + wPrime.toFixed(5) + '·' + s.distBefore.toFixed(3) + ' + (' + b.toFixed(5) + ') = ' + s.z.toFixed(3) + ', act(z) = Gas/Bremse = ' + sign + s.action.toFixed(2) + '\n' +
-      '    v\' = max(0, ' + s.vBefore.toFixed(2) + ' + (' + sign + s.action.toFixed(2) + '·' + maxAccel.toFixed(1) + ' − ' + dragCoeff.toFixed(2) + '·' + s.vBefore.toFixed(2) + ')·' + dt.toFixed(1) + ') = ' + s.vAfter.toFixed(2) + 'm/s (' + vAfterKmh + 'km/h)\n' +
-      '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(3) + ' − ' + s.vAfter.toFixed(2) + '·' + dt.toFixed(1) + ' = ' + s.rawDistAfter.toFixed(3) + 'm' +
+      '    v\' = max(0, ' + s.vBefore.toFixed(3) + ' + (' + sign + s.action.toFixed(2) + '·' + maxAccel.toFixed(1) + ' − ' + dragCoeff.toFixed(2) + '·' + s.vBefore.toFixed(3) + ')·' + dt.toFixed(1) + ') = ' + s.vAfter.toFixed(3) + 'm/s (' + vAfterKmh + 'km/h)\n' +
+      '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(3) + ' − ' + s.vAfter.toFixed(3) + '·' + dt.toFixed(1) + ' = ' + s.rawDistAfter.toFixed(3) + 'm' +
       (s.crashedNow ? '  → Crash (dist ≤ ' + crashDist + 'm)\n' : '\n');
   });
   logAreaEl.scrollTop = 0;
@@ -702,7 +710,10 @@ trainBtn.addEventListener('click', async function () {
     await frameDelay(300);
   }
   logArea.value += '→ übernommen: Restart ' + bestIndex + '/' + restarts + '\n';
-  logArea.scrollTop = logArea.scrollHeight;
+  // Waehrend der Restarts folgt der Scroll dem Zuwachs (scrollHeight), damit man live
+  // zuschauen kann -- nach Abschluss soll die Box aber von vorne lesbar sein, nicht am
+  // Ende der letzten Zeile stehen bleiben.
+  logArea.scrollTop = 0;
 
   logNeuronTrace(best.w, best.b, d0, maxAccelTrain, loss.label, logAreaTrace);
 
@@ -730,7 +741,7 @@ trainBtn.addEventListener('click', async function () {
 const logArea = document.getElementById('logArea');
 const logAreaTrace = document.getElementById('logAreaTrace');
 function logLine(p) {
-  const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
+  const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(3) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
   logArea.value += line;
   logArea.scrollTop = logArea.scrollHeight;
 }
@@ -824,7 +835,7 @@ playBtn.addEventListener('click', function () {
     updateThrottle(p.action);
     updateDist(p.dist);
     document.getElementById('readout').textContent =
-      't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
+      't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(3) + ' km/h';
     if (idx !== lastLoggedIdx) {
       logLine(p);
       lastLoggedIdx = idx;
@@ -902,7 +913,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
   });
 
   function logLineSD(p) {
-    const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
+    const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(3) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
     logAreaSD.value += line;
     logAreaSD.scrollTop = logAreaSD.scrollHeight;
   }
@@ -912,7 +923,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     updateGauge(p.speed * 3.6, 'needleSD', 'speedLabelSD');
     updateThrottle(p.action, 'throttleFillSD', 'actionLabelSD');
     updateDist(p.dist, 'distValSD');
-    readoutEl.textContent = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
+    readoutEl.textContent = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(3) + ' km/h';
   }
 
   function stop(reason) {
