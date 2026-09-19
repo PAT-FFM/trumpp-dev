@@ -259,9 +259,11 @@ not label it backpropagation in user-facing text.
   starts. Do not restate the ray relation without that qualification — an earlier
   caption did and it is plainly contradicted by the picture.
 - **Only the closest view makes the argument.** At w = 5 one grid step in b (0.006)
-  moves the penalty from **13** to **5,213,075** — while the approach is perfectly
-  smooth (… 742 → 240 → 13). That is what separates a discontinuity from a steep
-  slope, and it is invisible at the two wider zoom levels.
+  moves the penalty from **130** to **52,130,750** — while the approach is perfectly
+  smooth (… 7,420 → 2,400 → 130). That is what separates a discontinuity from a steep
+  slope, and it is invisible at the two wider zoom levels. (These are the ×1000-scaled
+  penalty values from `noteFor()`; an earlier ×100 scaling is why older notes/logs may
+  show these ten times smaller.)
 - **Restarts that reach the edge of the search space are discarded and redrawn**
   (`runOnceImInneren` in `parking.html`, max 10 attempts). This is a deliberate
   presentation choice, not part of the method, and it is the one place where the demo
@@ -273,7 +275,7 @@ not label it backpropagation in user-facing text.
   Measured cost: 22 % of attempts are affected (via `wMax` alone; `wMin`, `bMin` and
   `bMax` were never touched in 1600 runs), so ~1.3 attempts per restart, invisible
   next to the 5 × 300 ms display pauses. The discarded runs are in fact the *better*
-  ones (median 10 vs 15 penalty points on "Kombiniert"), but both stop 1 cm from the
+  ones (median 100 vs 150 penalty points on "Kombiniert"), but both stop 1 cm from the
   wall at the reference time — the difference is cosmetic, the driving identical.
   It lives in `parking.html`, not in `runOnce`, so `scripts/parking-selftest.js` keeps
   measuring the unfiltered algorithm; otherwise the documented numbers would drift

@@ -171,10 +171,16 @@ function noteFor(dist, speed, crashed, stopTime, minTime, loss) {
     note += excess * excess * loss.timeW;
   }
   // Strafpunkte sind ohnehin eine erfundene Groesse (keine physikalische
-  // Einheit) -- x100, damit auch sehr kleine dist/speed-Unterschiede nahe
+  // Einheit) -- x1000, damit auch sehr kleine dist/speed-Unterschiede nahe
   // der Wand als ganze Zahl sichtbar bleiben, statt beim Runden auf "0" zu
-  // verschwinden.
-  return note * 100;
+  // verschwinden (x100 reichte dafuer nicht: zwei Restarts nahe der Vorgabezeit
+  // rundeten im Trainings-Log noch auf dieselbe "Strafpunkte=0"-Anzeige, obwohl
+  // ihre tatsaechlichen -- fuer die Restart-Auswahl massgeblichen -- Kosten
+  // sich unterschieden). Reine Multiplikation des fertigen Werts: aendert nichts
+  // an Vorzeichen oder Reihenfolge, also weder am Sign-Gradient-Descent (der nur
+  // das Vorzeichen der Differenz nutzt) noch an der "bester von 5"-Auswahl noch
+  // an der Rangfolge-Faerbung der Landschaft (lsRamp/rankOf in parking.html).
+  return note * 1000;
 }
 
 // Jeder traj-Eintrag fuehrt neben dem Zustand (t/dist/speed) auch die Zwischenwerte
