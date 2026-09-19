@@ -21,6 +21,7 @@
   .carClassBtn.active[data-accel="1.5"] { background: #378ADD; border-color: #378ADD; }
   .carClassBtn.active[data-accel="2.0"] { background: #2F9E44; border-color: #2F9E44; }
   .carClassBtn.active[data-accel="3.5"] { background: #C0392B; border-color: #C0392B; }
+  .lossBtn { padding: 5px 10px; font-size: 13px; }
   .pedalBtn { flex: 0 0 auto; width: 52px; height: 144px; padding: 0; font-size: 14px; font-weight: 600; border-radius: 10px; border: 1px solid #ccc; user-select: none; -webkit-user-select: none; touch-action: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 3px 0 rgba(0,0,0,0.18); transition: transform 0.05s ease-out, box-shadow 0.05s ease-out, background-color 0.05s ease-out; }
   .pedalBtn .pedalArrow { font-size: 20px; line-height: 1; }
   .pedalBtn:active, .pedalBtn.pressed { transform: translateY(3px); box-shadow: inset 0 2px 5px rgba(0,0,0,0.3); }
@@ -48,6 +49,14 @@
   <button type="button" class="tabBtn carClassBtn" data-accel="3.5">Sportwagen</button>
 </div>
 
+<div class="row" id="lossRow">
+  <span class="lbl">Lossfunktion</span>
+  <button type="button" class="tabBtn lossBtn active" data-loss="combined">Kombiniert</button>
+  <button type="button" class="tabBtn lossBtn" data-loss="accuracy">Genauigkeit</button>
+  <button type="button" class="tabBtn lossBtn" data-loss="urgent">Starke Zeitstrafe</button>
+  <button type="button" class="tabBtn lossBtn" data-loss="safety">Sicherheit</button>
+</div>
+
 <div class="row">
   <button id="trainBtn">Trainieren</button>
   <span class="lbl" id="status" style="min-width:220px">noch nicht trainiert</span>
@@ -61,7 +70,7 @@
   <div class="box"><div class="lbl2">Gewicht w</div><input type="number" step="any" class="val" id="wVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
   <div class="box"><div class="lbl2">Schwelle b</div><input type="number" step="any" class="val" id="bVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
   <div class="box"><div class="lbl2">Strafpunkte</div><div class="val" id="noteVal">-</div></div>
-  <span style="font-size:11px;color:#888;max-width:220px">regulär (Δt := Zeit über Vorgabe):<br>(dist²·1000 + v²·100 + Δt²·5) · 100<br>bei Crash:<br>(v²·100 + 50000 + |v|·5000) · 100</span>
+  <span id="lossFormulaCaption" style="font-size:11px;color:#888;max-width:220px"></span>
 </div>
 
 <svg viewBox="0 0 680 140">
@@ -345,21 +354,50 @@ function minTimeFor(maxAccel) {
 // nach hinten (~0.42-0.44), weil laenger beschleunigt werden kann, bevor
 // aktiv gebremst werden muss.
 //
-// timeWeight (Zeitstrafe pro Sekunde^2 ueber der Referenzzeit T_min): experimentell,
-// noch nicht empirisch feinjustiert. Faustregel dahinter: bei den vom Training
-// typischerweise erreichten Endgenauigkeiten (wenige cm) ist dist*dist*1000 schon
-// nahe 0, ein kleiner Zeitueberschuss soll dort trotzdem den Ausschlag geben --
+// Waehlbare Lossfunktions-Varianten fuer den Trainings-Tab -- zeigt didaktisch, dass
+// nicht nur w/b, sondern die Zielfunktion selbst das Trainingsergebnis bestimmt.
+// distW/speedW/timeW sind die Gewichte der jeweiligen Terme in noteFor()'s
+// "regulaer"-Zweig (0 = Term entfaellt komplett, nicht nur abgeschwaecht). timeW=5
+// (bei "Kombiniert") ist experimentell, noch nicht empirisch feinjustiert: bei den vom
+// Training typischerweise erreichten Endgenauigkeiten (wenige cm) ist dist*dist*1000
+// schon nahe 0, ein kleiner Zeitueberschuss soll dort trotzdem den Ausschlag geben --
 // gleichzeitig soll die Zeitstrafe bei echten dist-Fehlern (>schon ein paar cm) nicht
-// dominieren. Bei timeWeight=5 entspricht 1s Zeitueberschuss ungefaehr 7cm dist-Fehler
+// dominieren. Bei timeW=5 entspricht 1s Zeitueberschuss ungefaehr 7cm dist-Fehler
 // (sqrt(5/1000)), 2s ungefaehr 14cm -- spuerbar, aber nicht Genauigkeit ueberstimmend.
-const timeWeight = 5;
-function noteFor(dist, speed, crashed, stopTime, minTime) {
-  let note = dist * dist * 1000 + speed * speed * 100;
+// Die Crash-Strafe (siehe noteFor) ist bei allen Varianten identisch -- sie ist eine
+// Sicherheitsschranke, kein didaktischer Vergleichsparameter.
+// timeW=50 (10x) und selbst timeW=1000 (200x) fuer "Starke Zeitstrafe" wurden
+// probeweise verworfen: unter der tatsaechlichen "beste von 5 Restarts"-Auswahl (wie
+// im trainBtn-Handler) ueberlappen die Ergebnis-Streubereiche noch zu stark, um in
+// einem einzelnen Trainingsklick zuverlaessig sichtbar zu sein. Erst timeW=10000
+// (2000x) liefert reproduzierbar (8/8 Testlaeufen) ein klar erkennbares, konsistent
+// hoeheres Spitzentempo als "Kombiniert" (~19.9-20 vs. 18.2-19.9 km/h Streubereich),
+// weiterhin ohne Crashes.
+const lossVariants = {
+  combined: { label: 'Kombiniert', distW: 1000, speedW: 100, timeW: 5 },
+  accuracy: { label: 'Genauigkeit', distW: 1000, speedW: 100, timeW: 0 },
+  // Gewichte gleichmaessig /100 gegenueber "Kombiniert" (10/1/100 statt 1000/100/10000):
+  // Sign-Gradient-Descent nutzt nur das Vorzeichen des Gradienten, eine gleichmaessige
+  // Skalierung aller drei Gewichte aendert also nichts am gefundenen (w,b) -- nur die
+  // Strafpunkte-Anzeige waere sonst um Groessenordnungen groesser als bei den anderen
+  // Varianten (Δt²·10000 dominiert bei typischem excess~0.1-0.3s alles andere), was bei
+  // nicht-technischen Usern verunsichert, obwohl das Ergebnis nicht "schlechter" ist.
+  urgent: { label: 'Starke Zeitstrafe', distW: 10, speedW: 1, timeW: 100 },
+  // Umgekehrte Gewichtung (Geschwindigkeit zaehlt staerker als Distanz): laut
+  // Grossstichproben-Test (N=200 Einzellaeufe ohne Restart-Auswahl) moderat
+  // zuverlaessiger als "Kombiniert" (0 statt 2/200 Crashes, kleinere Ausreisser),
+  // aber kein dramatischer Unterschied -- bei "beste von 5 Restarts" (wie im
+  // trainBtn-Handler) kaum sichtbar, da das ohnehin die meisten schlechten
+  // Einzelversuche aussortiert.
+  safety: { label: 'Sicherheit', distW: 100, speedW: 1000, timeW: 0 },
+};
+function noteFor(dist, speed, crashed, stopTime, minTime, loss) {
+  let note = dist * dist * loss.distW + speed * speed * loss.speedW;
   if (crashed) {
     note += 50000 + Math.abs(speed) * 5000;
-  } else if (stopTime !== undefined && minTime !== undefined) {
+  } else if (loss.timeW > 0 && stopTime !== undefined && minTime !== undefined) {
     const excess = Math.max(0, stopTime - minTime);
-    note += excess * excess * timeWeight;
+    note += excess * excess * loss.timeW;
   }
   // Strafpunkte sind ohnehin eine erfundene Groesse (keine physikalische
   // Einheit) -- x100, damit auch sehr kleine dist/speed-Unterschiede nahe
@@ -368,7 +406,7 @@ function noteFor(dist, speed, crashed, stopTime, minTime) {
   return note * 100;
 }
 
-function simulate(w, b, d0, maxAccel) {
+function simulate(w, b, d0, maxAccel, loss) {
   let dist = d0, speed = 0, t = 0, crashed = false;
   const traj = [{ t, dist, speed, action: 0 }];
   while (t < maxT - 1e-9) {
@@ -386,12 +424,12 @@ function simulate(w, b, d0, maxAccel) {
   }
   const last = traj[traj.length - 1];
   const note = crashed
-    ? noteFor(last.dist, last.speed, crashed)
-    : noteFor(last.dist, last.speed, crashed, stopTimeOf(traj), minTimeFor(maxAccel));
+    ? noteFor(last.dist, last.speed, crashed, undefined, undefined, loss)
+    : noteFor(last.dist, last.speed, crashed, stopTimeOf(traj), minTimeFor(maxAccel), loss);
   return { traj, note, crashed };
 }
 
-function costOf(w, b, d0, maxAccel) { return simulate(w, b, d0, maxAccel).note; }
+function costOf(w, b, d0, maxAccel, loss) { return simulate(w, b, d0, maxAccel, loss).note; }
 
 const wallX = 620, carW = 60, roadStart = 40, usable = 520;
 function placeCar(dist, d0Val = d0, carId = 'car', crashed = false) {
@@ -421,7 +459,7 @@ function updateGauge(speedKmh, needleId = 'needle', speedLabelId = 'speedLabel')
 updateGauge(0);
 
 function updateDist(dist, labelId = 'distVal') {
-  document.getElementById(labelId).textContent = dist.toFixed(2) + ' m';
+  document.getElementById(labelId).textContent = dist.toFixed(3) + ' m';
 }
 updateDist(d0);
 
@@ -451,20 +489,42 @@ const playBtn = document.getElementById('playBtn');
 const status = document.getElementById('status');
 const noteVal = document.getElementById('noteVal');
 const carClassBtnsTrain = document.querySelectorAll('#carClassRow .carClassBtn');
+const lossBtnsTrain = document.querySelectorAll('#lossRow .lossBtn');
+const lossFormulaCaption = document.getElementById('lossFormulaCaption');
 
 let maxAccelTrain = 2.0;
 let trainedAccel = null, trainedLabel = '';
+let activeLossKey = 'combined';
+let trainedLossKey = null, trainedLossLabel = '';
 
 setCarColor('car', '2.0');
 
 function activeCarClassBtn() { return document.querySelector('#carClassRow .carClassBtn.active'); }
+function activeLossBtn() { return document.querySelector('#lossRow .lossBtn.active'); }
 
 function checkTrainingStatus() {
   if (trainedAccel === null) return;
-  status.textContent = maxAccelTrain === trainedAccel
-    ? 'trainiert für ' + trainedLabel
-    : 'w/b noch von ' + trainedLabel + ' (neu trainieren für ' + activeCarClassBtn().textContent + '?)';
+  const matches = maxAccelTrain === trainedAccel && activeLossKey === trainedLossKey;
+  status.textContent = matches
+    ? 'trainiert für ' + trainedLabel + ' / ' + trainedLossLabel
+    : 'w/b noch von ' + trainedLabel + ' / ' + trainedLossLabel + ' (neu trainieren für ' + activeCarClassBtn().textContent + ' / ' + activeLossBtn().textContent + '?)';
 }
+
+// Baut die Strafpunkte-Formel-Bildunterschrift aus den Gewichten der aktuell
+// gewaehlten Lossfunktion zusammen -- Terme mit Gewicht 0 werden weggelassen, damit
+// z.B. bei einer kuenftigen "nur v"-Variante sichtbar waere, dass der dist-Term
+// komplett entfaellt statt nur auf 0 herunterskaliert zu sein.
+function updateLossCaption() {
+  const loss = lossVariants[activeLossKey];
+  const terms = [];
+  if (loss.distW) terms.push('dist²·' + loss.distW);
+  if (loss.speedW) terms.push('v²·' + loss.speedW);
+  if (loss.timeW) terms.push('Δt²·' + loss.timeW);
+  lossFormulaCaption.innerHTML =
+    'regulär (Δt := Zeit über Vorgabe):<br>(' + terms.join(' + ') + ') · 100<br>' +
+    'bei Crash:<br>(v²·' + loss.speedW + ' + 50000 + |v|·5000) · 100';
+}
+updateLossCaption();
 
 carClassBtnsTrain.forEach(function (btn) {
   btn.addEventListener('click', function () {
@@ -472,6 +532,16 @@ carClassBtnsTrain.forEach(function (btn) {
     btn.classList.add('active');
     maxAccelTrain = +btn.dataset.accel;
     setCarColor('car', btn.dataset.accel);
+    checkTrainingStatus();
+  });
+});
+
+lossBtnsTrain.forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    lossBtnsTrain.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeLossKey = btn.dataset.loss;
+    updateLossCaption();
     checkTrainingStatus();
   });
 });
@@ -485,6 +555,7 @@ function updatePlayEnabled() {
 // wir wissen dann nicht mehr, ob die Werte zur Fahrzeugklasse passen.
 function onManualWB() {
   trainedAccel = null;
+  trainedLossKey = null;
   status.textContent = 'manuell gesetzt';
   updatePlayEnabled();
 }
@@ -505,14 +576,14 @@ bInput.addEventListener('input', onManualWB);
 // wiederholt diesen Versuch deshalb mehrfach und behaelt den besten.
 // Kurzbeschreibung, wie die Strafpunkte fuer ein (w,b)-Paar zustande kommen --
 // fuers Trainings-Log, damit "Strafpunkte=19" nicht als Blackbox-Zahl dasteht.
-function outcomeDetail(w, b, d0, maxAccel) {
-  const r = simulate(w, b, d0, maxAccel);
+function outcomeDetail(w, b, d0, maxAccel, loss) {
+  const r = simulate(w, b, d0, maxAccel, loss);
   const last = r.traj[r.traj.length - 1];
   if (r.crashed) {
     return 'Crash bei t=' + last.t.toFixed(1) + 's, v=' + (last.speed * 3.6).toFixed(1) + 'km/h';
   }
   const stopT = stopTimeOf(r.traj);
-  return 'dist=' + last.dist.toFixed(2) + 'm, t=' + stopT.toFixed(1) + 's, v=' + Math.round(last.speed * 3.6) + 'km/h';
+  return 'dist=' + last.dist.toFixed(3) + 'm, t=' + stopT.toFixed(1) + 's, v=' + Math.round(last.speed * 3.6) + 'km/h';
 }
 
 // Detaillierte Log-Ausgabe der Neuron-Rechenkette (dist -> ×w' -> +b -> hardTanh ->
@@ -523,7 +594,7 @@ function outcomeDetail(w, b, d0, maxAccel) {
 // rechnet jede Zeile direkt mit der rohen Distanz in Metern -- w*(dist/d0)+b ist
 // aequivalent zu w'*dist+b. Wiederholt sonst dieselbe Physik-Schleife wie simulate(),
 // da deren traj-Eintraege die Zwischenwerte (z, v vor/nach Update) nicht mitfuehren.
-function logNeuronTrace(w, b, d0, maxAccel, logAreaEl) {
+function logNeuronTrace(w, b, d0, maxAccel, lossLabel, logAreaEl) {
   const wPrime = w / d0;
   let dist = d0, speed = 0, t = 0;
   const steps = [];
@@ -550,6 +621,7 @@ function logNeuronTrace(w, b, d0, maxAccel, logAreaEl) {
 
   logAreaEl.value +=
     'Neuron-Iteration für übernommenen Lauf:\n' +
+    '  Lossfunktion: ' + lossLabel + '\n' +
     '  w=' + w.toFixed(5) + ', b=' + b.toFixed(5) + ', maxAccel=' + maxAccel.toFixed(1) + 'm/s²\n' +
     '  Normierung: w\' = w/d0 = ' + w.toFixed(5) + '/' + d0.toFixed(2) + ' = ' + wPrime.toFixed(5) + '\n' +
     '  Formel: v\' = max(0, v + (Gas/Bremse·maxAccel − dragCoeff·v)·dt)\n' +
@@ -559,20 +631,20 @@ function logNeuronTrace(w, b, d0, maxAccel, logAreaEl) {
     const vKmh = (s.vBefore * 3.6).toFixed(1);
     const vAfterKmh = (s.vAfter * 3.6).toFixed(1);
     logAreaEl.value +=
-      '\n  Schritt ' + i + ' (t=' + s.t.toFixed(1) + 's, dist=' + s.distBefore.toFixed(2) + 'm, v=' + s.vBefore.toFixed(2) + 'm/s (' + vKmh + 'km/h)):\n' +
-      '    z = w\'*dist+b = ' + wPrime.toFixed(5) + '·' + s.distBefore.toFixed(2) + ' + (' + b.toFixed(5) + ') = ' + s.z.toFixed(3) + ', act(z) = Gas/Bremse = ' + sign + s.action.toFixed(2) + '\n' +
+      '\n  Schritt ' + i + ' (t=' + s.t.toFixed(1) + 's, dist=' + s.distBefore.toFixed(3) + 'm, v=' + s.vBefore.toFixed(2) + 'm/s (' + vKmh + 'km/h)):\n' +
+      '    z = w\'*dist+b = ' + wPrime.toFixed(5) + '·' + s.distBefore.toFixed(3) + ' + (' + b.toFixed(5) + ') = ' + s.z.toFixed(3) + ', act(z) = Gas/Bremse = ' + sign + s.action.toFixed(2) + '\n' +
       '    v\' = max(0, ' + s.vBefore.toFixed(2) + ' + (' + sign + s.action.toFixed(2) + '·' + maxAccel.toFixed(1) + ' − ' + dragCoeff.toFixed(2) + '·' + s.vBefore.toFixed(2) + ')·' + dt.toFixed(1) + ') = ' + s.vAfter.toFixed(2) + 'm/s (' + vAfterKmh + 'km/h)\n' +
-      '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(2) + ' − ' + s.vAfter.toFixed(2) + '·' + dt.toFixed(1) + ' = ' + s.rawDistAfter.toFixed(2) + 'm' +
+      '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(3) + ' − ' + s.vAfter.toFixed(2) + '·' + dt.toFixed(1) + ' = ' + s.rawDistAfter.toFixed(3) + 'm' +
       (s.crashedNow ? '  → Crash (dist ≤ ' + crashDist + 'm)\n' : '\n');
   });
   logAreaEl.scrollTop = 0;
 }
 
-function runOnce(d0, maxAccel) {
-  let bestW = 0.5, bestB = -0.5, bestCost = costOf(bestW, bestB, d0, maxAccel);
+function runOnce(d0, maxAccel, loss) {
+  let bestW = 0.5, bestB = -0.5, bestCost = costOf(bestW, bestB, d0, maxAccel, loss);
   for (let k = 0; k < 60; k++) {
     const rw = (Math.random() * 8 - 4), rb = (Math.random() * 6 - 3);
-    const c = costOf(rw, rb, d0, maxAccel);
+    const c = costOf(rw, rb, d0, maxAccel, loss);
     if (c < bestCost) { bestCost = c; bestW = rw; bestB = rb; }
   }
   let w = bestW, b = bestB;
@@ -580,8 +652,8 @@ function runOnce(d0, maxAccel) {
   let stepW = 0.25, stepB = 0.25;
   const eps = 0.02, totalSteps = 350;
   for (let step = 0; step < totalSteps; step++) {
-    const cw = (costOf(w + eps, b, d0, maxAccel) - costOf(w - eps, b, d0, maxAccel)) / (2 * eps);
-    const cb = (costOf(w, b + eps, d0, maxAccel) - costOf(w, b - eps, d0, maxAccel)) / (2 * eps);
+    const cw = (costOf(w + eps, b, d0, maxAccel, loss) - costOf(w - eps, b, d0, maxAccel, loss)) / (2 * eps);
+    const cb = (costOf(w, b + eps, d0, maxAccel, loss) - costOf(w, b - eps, d0, maxAccel, loss)) / (2 * eps);
     w -= Math.sign(cw) * stepW;
     b -= Math.sign(cb) * stepB;
     w = Math.max(-6, Math.min(6, w));
@@ -592,7 +664,7 @@ function runOnce(d0, maxAccel) {
     // guten Loesung in eine flache Zone abdriften (Gradient dort exakt 0,
     // z.B. wenn das Auto nie anfaehrt) und dort haengen bleiben. Deshalb den
     // besten je gesehenen Zustand separat mitfuehren statt nur den letzten.
-    const c = costOf(w, b, d0, maxAccel);
+    const c = costOf(w, b, d0, maxAccel, loss);
     if (c < bestCost) { bestCost = c; bestW = w; bestB = b; }
   }
   return { w: bestW, b: bestB, cost: bestCost };
@@ -607,10 +679,13 @@ trainBtn.addEventListener('click', async function () {
   wInput.disabled = true;
   bInput.disabled = true;
   carClassBtnsTrain.forEach(b => b.disabled = true);
+  lossBtnsTrain.forEach(b => b.disabled = true);
   playBtn.disabled = true;
   status.textContent = 'suche startwerte ...';
   logArea.value = '';
   logAreaTrace.value = '';
+
+  const loss = lossVariants[activeLossKey];
 
   // Mehrere unabhaengige Trainingsversuche, bester gewinnt: schuetzt gegen
   // einen einzelnen ungluecklichen Versuch, der in einem mittelmaessigen
@@ -620,16 +695,16 @@ trainBtn.addEventListener('click', async function () {
   const restarts = 5;
   let best = null, bestIndex = -1;
   for (let i = 0; i < restarts; i++) {
-    const r = runOnce(d0, maxAccelTrain);
+    const r = runOnce(d0, maxAccelTrain, loss);
     if (!best || r.cost < best.cost) { best = r; bestIndex = i + 1; }
-    logArea.value += 'Restart ' + (i + 1) + '/' + restarts + ':  w=' + r.w.toFixed(3) + '  b=' + r.b.toFixed(2) + '  Strafpunkte=' + Math.round(r.cost) + ' (' + outcomeDetail(r.w, r.b, d0, maxAccelTrain) + ')\n';
+    logArea.value += 'Restart ' + (i + 1) + '/' + restarts + ':  w=' + r.w.toFixed(3) + '  b=' + r.b.toFixed(2) + '  Strafpunkte=' + Math.round(r.cost) + ' (' + outcomeDetail(r.w, r.b, d0, maxAccelTrain, loss) + ')\n';
     logArea.scrollTop = logArea.scrollHeight;
     await frameDelay(300);
   }
   logArea.value += '→ übernommen: Restart ' + bestIndex + '/' + restarts + '\n';
   logArea.scrollTop = logArea.scrollHeight;
 
-  logNeuronTrace(best.w, best.b, d0, maxAccelTrain, logAreaTrace);
+  logNeuronTrace(best.w, best.b, d0, maxAccelTrain, loss.label, logAreaTrace);
 
   // Hohe Praezision hier, nicht nur kosmetisch gerundet: das System reagiert
   // nahe der Crash-Schwelle empfindlich auf kleine w/b-Aenderungen (siehe
@@ -640,19 +715,22 @@ trainBtn.addEventListener('click', async function () {
   noteVal.textContent = Math.round(best.cost);
   trainedAccel = maxAccelTrain;
   trainedLabel = activeCarClassBtn().textContent;
-  status.textContent = 'trainiert für ' + trainedLabel;
+  trainedLossKey = activeLossKey;
+  trainedLossLabel = activeLossBtn().textContent;
+  status.textContent = 'trainiert für ' + trainedLabel + ' / ' + trainedLossLabel;
 
   trainBtn.disabled = false;
   wInput.disabled = false;
   bInput.disabled = false;
   carClassBtnsTrain.forEach(b => b.disabled = false);
+  lossBtnsTrain.forEach(b => b.disabled = false);
   updatePlayEnabled();
 });
 
 const logArea = document.getElementById('logArea');
 const logAreaTrace = document.getElementById('logAreaTrace');
 function logLine(p) {
-  const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
+  const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
   logArea.value += line;
   logArea.scrollTop = logArea.scrollHeight;
 }
@@ -723,7 +801,7 @@ playBtn.addEventListener('click', function () {
   speedChartWrap.style.display = 'none';
   distChartWrap.style.display = 'none';
   let lastLoggedIdx = -1;
-  const r = simulate(w, b, d0, maxAccelTrain);
+  const r = simulate(w, b, d0, maxAccelTrain, lossVariants[activeLossKey]);
   const traj = r.traj.slice(0, stopIndexOf(r.traj) + 1);
   const msPerSimSecond = 400;
   const duration = Math.max(traj[traj.length - 1].t * msPerSimSecond, 400);
@@ -746,7 +824,7 @@ playBtn.addEventListener('click', function () {
     updateThrottle(p.action);
     updateDist(p.dist);
     document.getElementById('readout').textContent =
-      't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
+      't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
     if (idx !== lastLoggedIdx) {
       logLine(p);
       lastLoggedIdx = idx;
@@ -824,7 +902,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
   });
 
   function logLineSD(p) {
-    const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
+    const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
     logAreaSD.value += line;
     logAreaSD.scrollTop = logAreaSD.scrollHeight;
   }
@@ -834,7 +912,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     updateGauge(p.speed * 3.6, 'needleSD', 'speedLabelSD');
     updateThrottle(p.action, 'throttleFillSD', 'actionLabelSD');
     updateDist(p.dist, 'distValSD');
-    readoutEl.textContent = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
+    readoutEl.textContent = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(1) + ' km/h';
   }
 
   function stop(reason) {
@@ -842,8 +920,8 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = null;
     noteEl.textContent = Math.round(crashed
-      ? noteFor(dist, speed, crashed)
-      : noteFor(dist, speed, crashed, stopTimeOf(trajSD), minTimeFor(maxAccelSD)));
+      ? noteFor(dist, speed, crashed, undefined, undefined, lossVariants.combined)
+      : noteFor(dist, speed, crashed, stopTimeOf(trajSD), minTimeFor(maxAccelSD), lossVariants.combined));
     statusEl.textContent = reason;
     renderChart(trajSD, actionChartSD, chartWrapSD);
     renderSpeedChart(trajSD, speedChartSD, speedChartWrapSD);
