@@ -3,10 +3,11 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Einpark-Neuron: Training und Animation</title>
 <style>
   body { font-family: sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 0.9rem; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 0.9rem; flex-wrap: wrap; }
   .lbl { font-size: 14px; color: #555; min-width: 110px; }
   input[type=range] { flex: 1; }
   button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
@@ -22,6 +23,36 @@
   .carClassBtn.active[data-accel="2.0"] { background: #2F9E44; border-color: #2F9E44; }
   .carClassBtn.active[data-accel="3.5"] { background: #C0392B; border-color: #C0392B; }
   .lossBtn { padding: 5px 10px; font-size: 13px; }
+  /* Die Strassenszene ist 680 breit, die Anzeigenreihe mit Tacho, Distanz, Gas-Balken
+     und zwei Pedalen rund 500 -- im Hochformat auf einem Telefon wird das eng. Der
+     Hinweis ist rein informativ und blockiert nichts; flex-wrap sorgt dafuer, dass die
+     Seite auch dann nicht bricht, wenn man ihn ignoriert. */
+  #rotateHint { display: none; }
+  @media (orientation: portrait) and (max-width: 700px) {
+    #rotateHint { display: block; background: #f2f2f0; border-left: 3px solid #378ADD;
+      border-radius: 4px; padding: 7px 10px; font-size: 13px; color: #555; margin-bottom: 0.9rem; }
+    /* Im Hochformat bricht die Anzeigenreihe um, und die beiden Pedale landen sonst
+       auf verschiedenen Zeilen mit mehreren hundert Pixeln dazwischen -- unbedienbar,
+       wenn man beide Daumen braucht. Per order rutschen sie ans Ende und damit
+       nebeneinander. */
+    #bremseBtnSD { order: 10; }
+    #gasBtnSD { order: 11; }
+  }
+  .gaugeRow { display: flex; justify-content: center; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+  #landscapeDetails > summary { cursor: pointer; font-size: 12px; color: #555; padding: 4px 0; }
+  #landscapeDetails > summary:hover { color: #222; }
+  .lsPanel { margin-top: 0.9rem; }
+  .lsTitle { font-size: 12px; color: #555; margin-bottom: 2px; font-weight: 600; }
+  .lsTitle span { font-weight: 400; color: #999; }
+  .lsPanel canvas { width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; display: block; }
+  .lsCaption { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.45; }
+  #lsTooltip { position: fixed; z-index: 10; pointer-events: none; white-space: pre-line;
+    background: #222; color: #fff; font-size: 12px; font-family: monospace; line-height: 1.5;
+    padding: 6px 9px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+  #lsTooltip[hidden] { display: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: #555; margin-top: 5px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
   .pedalBtn { flex: 0 0 auto; width: 52px; height: 144px; padding: 0; font-size: 14px; font-weight: 600; border-radius: 10px; border: 1px solid #ccc; user-select: none; -webkit-user-select: none; touch-action: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 3px 0 rgba(0,0,0,0.18); transition: transform 0.05s ease-out, box-shadow 0.05s ease-out, background-color 0.05s ease-out; }
   .pedalBtn .pedalArrow { font-size: 20px; line-height: 1; }
   .pedalBtn:active, .pedalBtn.pressed { transform: translateY(3px); box-shadow: inset 0 2px 5px rgba(0,0,0,0.3); }
@@ -34,6 +65,8 @@
 <body>
 
 <h2>Einpark-Neuron: Training und Animation</h2>
+
+<div id="rotateHint">Quer halten für die volle Anzeige.</div>
 
 <div class="row" style="gap:8px">
   <button id="tabSelfDrive" class="tabBtn active">Self-Drive</button>
@@ -101,9 +134,9 @@
   </g>
 </svg>
 
-<div style="position:relative;margin-bottom:0.5rem" id="gaugeRow">
+<div style="position:relative;margin-bottom:0.5rem">
   <button id="playBtn" disabled style="position:absolute;left:0;top:50%;transform:translateY(-50%);padding:10px 14px;max-width:110px">Animation starten</button>
-  <div style="display:flex;justify-content:center;align-items:flex-end;gap:24px">
+  <div class="gaugeRow">
     <div style="text-align:center">
       <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz</div>
       <div style="font-size:18px;font-weight:600" id="distVal">-</div>
@@ -156,6 +189,68 @@
   <svg id="distChart" viewBox="0 0 680 160"></svg>
 </div>
 
+<details id="landscapeDetails" style="margin-top:0.9rem">
+  <summary>Strafpunkte-Landschaft über w und b — drei Zoomstufen</summary>
+
+  <div class="legend" style="margin-top:8px">
+    <span><i style="background:#08243C"></i>gut<i style="background:#175E85;margin-left:0"></i><i style="background:#3EA08C;margin-left:0"></i><i style="background:#CFE0A0;margin-left:0"></i>schlecht <span style="color:#999">(Rangfolge, je Karte neu)</span></span>
+    <span><i style="background:#D8D8D4"></i>fährt nicht los</span>
+    <span><i style="background:#D9897B"></i>Crash</span>
+    <span><i style="background:#D85A30;height:3px;border-radius:0"></i>übernommener Restart</span>
+    <span><i style="background:#8E44AD;height:3px;border-radius:0"></i>übrige Restarts</span>
+    <span><i style="background:#fff;border:1.5px solid #888;border-radius:50%;width:10px"></i>Start</span>
+    <span><b style="font-size:13px;line-height:1">&#215;</b> Auswertungspunkt (nur Karte 3)</span>
+  </div>
+  <div style="font-size:11px;color:#888;margin-top:4px;line-height:1.45">
+    Karte 1 und 2 zeigen den Verlauf als Linie, Karte 3 nur noch die Kreuze — die
+    einzigen Stellen, an denen überhaupt gerechnet wird. Dort wäre eine Linie irreführend:
+    der Abstieg legt keinen Weg zurück, er springt von Punkt zu Punkt und entscheidet
+    erst nach der Landung neu. Was dazwischen liegt, hat er nie gesehen.
+    Zeigen oder gedrückt halten auf einen Punkt nennt seine Werte — auch auf Karte 1
+    und 2, dort entlang der Linie. Restarts, die an den Rand des Suchraums stoßen,
+    werden verworfen und neu gezogen: die Grenze bei w = 6 ist willkürlich gesetzt und
+    gehört nicht zur Aufgabe.
+  </div>
+  <div id="lsTooltip" hidden></div>
+
+  <div class="lsPanel">
+    <div class="lsTitle">1 — Der ganze Suchraum</div>
+    <canvas id="landscape1" width="680" height="320"></canvas>
+    <div class="lsCaption">
+      Das Training sucht nur zwei Zahlen — die ganze Kostenfläche passt deshalb auf ein
+      Bild. In der grauen Hälfte unten links kommt das Auto nie in Fahrt (50&nbsp;%);
+      die Strafpunkte sind dort <em>überall exakt gleich</em>, der Abstieg findet also
+      kein Gefälle und bleibt stehen. Oben rechts wird so lange Gas gegeben, dass es
+      gegen die Wand knallt (41&nbsp;%). Brauchbar sind nur die 9&nbsp;% dazwischen.
+    </div>
+  </div>
+
+  <div class="lsPanel">
+    <div class="lsTitle">2 — Hinein ins Tal</div>
+    <canvas id="landscape2" width="680" height="320"></canvas>
+    <div class="lsCaption">
+      Rechts, ab etwa w = 1,5, ist der brauchbare Streifen eine <em>Gerade zum
+      Ursprung</em>: dort sättigt die Aktivierung, das Neuron fährt Vollgas und dann
+      Vollbremsung, und für den Umschaltpunkt zählt allein das Verhältnis −b/w —
+      gemessen konstant bei 0,42. Es gibt also nicht eine Lösung, sondern einen ganzen
+      Strahl davon, und je weiter außen, desto besser. Links biegt die Kante sichtbar
+      ab und kreuzt b = 0 bei w ≈ 0,6: bei kleinem w sättigt nichts mehr, die Aktion
+      ist nur noch ein flacher Anstieg, und bei w = 0 sogar eine Konstante — dort
+      entscheidet nicht mehr der Bremsweg, sondern ob die 10 Sekunden überhaupt bis
+      zur Wand reichen.
+    </div>
+  </div>
+
+  <div class="lsPanel">
+    <div class="lsTitle">3 — Der übernommene Lauf, ganz nah <span id="lsFocusLabel"></span></div>
+    <canvas id="landscape3" width="680" height="320"></canvas>
+    <div class="lsCaption">
+      Nach dem Training genau auf den übernommenen Lauf zugeschnitten.
+    </div>
+  </div>
+
+</details>
+
 </div>
 
 <div id="selfDrivePanel">
@@ -168,7 +263,7 @@
 </div>
 
 <div class="row">
-  <span class="lbl" style="min-width:0">Steuerung: Pfeiltaste hoch = Gas, Pfeiltaste runter = Bremse (volles Gas/Bremse solange gedrueckt, nach Loslassen sofort 0). Gasgeben startet die Fahrt. Bei Stillstand nochmal kurz auf die Bremse tippen beendet die Fahrt vorzeitig (Handbremse). Auf dem Handy stattdessen die Pedal-Buttons neben der Anzeige gedrueckt halten.</span>
+  <span class="lbl" style="min-width:0">Steuerung: Pfeiltaste hoch = Gas, Pfeiltaste runter = Bremse (volles Gas/Bremse solange gedrückt, nach Loslassen sofort 0). Gasgeben startet die Fahrt. Bei Stillstand nochmal kurz auf die Bremse tippen beendet die Fahrt vorzeitig (Handbremse). Auf dem Handy stattdessen die Pedal-Buttons neben der Anzeige gedrückt halten.</span>
 </div>
 
 <div class="row">
@@ -203,7 +298,7 @@
   </g>
 </svg>
 
-<div style="display:flex;justify-content:center;align-items:flex-end;gap:24px;margin-bottom:0.5rem">
+<div class="gaugeRow" style="margin-bottom:0.5rem">
   <button type="button" id="bremseBtnSD" class="pedalBtn"><span class="pedalArrow">▼</span>Bremse</button>
   <div style="text-align:center">
     <div style="font-size:12px;color:#555;margin-bottom:2px">Distanz</div>
@@ -237,10 +332,6 @@
     </svg>
     <div style="font-size:14px;font-weight:600" id="actionLabelSD">0.00</div>
   </div>
-  <div style="text-align:center">
-    <div style="font-size:12px;color:#555;margin-bottom:2px">Strafpunkte</div>
-    <div style="font-size:18px;font-weight:600" id="noteValSD">-</div>
-  </div>
   <button type="button" id="gasBtnSD" class="pedalBtn"><span class="pedalArrow">▲</span>Gas</button>
 </div>
 
@@ -265,171 +356,8 @@
 
 </div>
 
+<script src="parking-core.js"></script>
 <script>
-const dt = 0.1, maxT = 10.0;
-// Realistisch ist "an der Wand ankommen" kein Sonderfall: Unter 1cm Abstand
-// gilt bereits als Kontakt/Crash, nicht erst bei exakt 0.
-const crashDist = 0.01;
-// Die Startdistanz ist als Trainingsparameter kaum aussagekraeftig, da das
-// Neuron ohnehin nur dist/d0 sieht und der Input somit immer bei 1 startet.
-// Die eigentlich interessante Stellschraube ist die Fahrzeugklasse
-// (maxAccel), die ueber die Buttons unten ausgewaehlt wird.
-const d0 = 20.0;
-
-// Roll-/Windwiderstand: wirkt proportional zur Geschwindigkeit immer
-// bremsend, egal was das Pedal gerade macht -- bricht bewusst die Symmetrie
-// zwischen Beschleunigen und Bremsen (ohne ihn waeren beide durch dasselbe
-// maxAccel exakt gleich stark, siehe Kommentar bei noteFor). Global und
-// nicht pro Fahrzeugklasse, da es eine Umgebungseigenschaft ist, keine
-// Fahrzeugeigenschaft.
-const dragCoeff = 0.08;
-
-// Hard-Tanh (clamp auf [-1,1]) statt tanh: bildet ein Gaspedal, das bei 100%
-// hart saettigt, exakter ab als tanhs nur asymptotische Annaeherung an ±1 --
-// und braucht bei nur einem Neuron mit numerischem Differenzen-Gradienten
-// (statt Backprop durch viele Schichten) keine Glattheit.
-function hardTanh(x) { return Math.max(-1, Math.min(1, x)); }
-
-// Erster Zeitpunkt, an dem sich Distanz/Geschwindigkeit nicht mehr aendern (Fahrzeug
-// ist -- nachdem es sich bewegt hat -- endgueltig zum Stillstand gekommen). Sowohl bei
-// simulate() (laeuft technisch bis maxT durch) als auch bei einem Self-Drive-Lauf
-// (laeuft bis Handbremse/Zeitlimit/Crash durch) ist das Ende der Trajektorie nicht der
-// relevante Zeitpunkt fuer die Zeitstrafe in noteFor() -- das waere sonst immer
-// (fast) maxT bzw. die Laufzeit bis zum Handbremse-Druck, egal wie fix das Fahrzeug
-// tatsaechlich stand.
-function stopIndexOf(traj) {
-  let hasMoved = false;
-  for (let i = 0; i < traj.length; i++) {
-    if (traj[i].speed > 0.3) hasMoved = true;
-    if (hasMoved && traj[i].speed <= 0.02) return i;
-  }
-  return traj.length - 1;
-}
-function stopTimeOf(traj) { return traj[stopIndexOf(traj)].t; }
-
-// Referenzzeit fuer die Zeitstrafe unten: kuerzeste moegliche Zeit, in der ein
-// Bang-Bang-Manoever (Vollgas, an einem einzigen Zeitpunkt Wechsel auf Vollbremsung)
-// exakt mit v=0 an der Wand ankommt. Numerisch per Bisektion ueber den Wechselzeitpunkt
-// bestimmt statt per geschlossener Formel (2*sqrt(d0/maxAccel)), weil dragCoeff das
-// Optimum leicht verschiebt (siehe Kommentar bei noteFor) -- die geschlossene Formel
-// waere ohne dragCoeff eine leichte Unterschaetzung und wuerde selbst perfektes Fahren
-// bestrafen. Pro Fahrzeugklasse (maxAccel) nur einmal berechnet und gecacht, da sonst
-// jeder einzelne costOf()-Aufruf im Trainings-Suchlauf zusaetzlich ~40 Bisektions-
-// Simulationen mitschleppen wuerde.
-function bangBangFinal(tSwitch, maxAccel) {
-  let dist = d0, speed = 0, t = 0;
-  while (t < maxT - 1e-9) {
-    const action = t < tSwitch ? 1 : -1;
-    speed = Math.max(0, speed + (action * maxAccel - dragCoeff * speed) * dt);
-    dist -= speed * dt;
-    t += dt;
-    if (dist <= 0) return { dist: 0, t, stopped: false };
-    if (speed === 0) return { dist, t, stopped: true };
-  }
-  return { dist, t, stopped: false };
-}
-const minTimeCache = {};
-function minTimeFor(maxAccel) {
-  if (minTimeCache[maxAccel] !== undefined) return minTimeCache[maxAccel];
-  // lo: spaetestens hier ohne Crash zum Stehen gekommen (zu frueh gebremst, Rest-dist
-  // > 0). hi: spaetestens hier gecrasht (zu spaet gebremst). Gesucht ist die Grenze
-  // dazwischen -- der zeit-optimale Wechselzeitpunkt.
-  let lo = 0, hi = maxT;
-  for (let i = 0; i < 40; i++) {
-    const mid = (lo + hi) / 2;
-    const r = bangBangFinal(mid, maxAccel);
-    if (r.stopped && r.dist > 0) lo = mid; else hi = mid;
-  }
-  minTimeCache[maxAccel] = bangBangFinal(lo, maxAccel).t;
-  return minTimeCache[maxAccel];
-}
-
-// Trotz vieler moeglicher (w,b)-Loesungen sieht die Geschwindigkeitskurve
-// nach dem Training immer aehnlich aus (Rampe rauf, Spitze, dann runter):
-// "Vollgas, dann volle Bremsung" ist die kostenoptimale Bang-Bang-Strategie
-// fuer diese Aufgabe. Der Umschaltpunkt -b/w liegt deshalb ueber verschiedene
-// Trainingslaeufe hinweg stets in einer aehnlichen Groessenordnung -- ohne
-// dragCoeff waere er wegen der reinen Beschleunigen/Bremsen-Symmetrie exakt
-// dist/d0 = 0.5, mit Widerstand (bremst immer mit) verschiebt er sich etwas
-// nach hinten (~0.42-0.44), weil laenger beschleunigt werden kann, bevor
-// aktiv gebremst werden muss.
-//
-// Waehlbare Lossfunktions-Varianten fuer den Trainings-Tab -- zeigt didaktisch, dass
-// nicht nur w/b, sondern die Zielfunktion selbst das Trainingsergebnis bestimmt.
-// distW/speedW/timeW sind die Gewichte der jeweiligen Terme in noteFor()'s
-// "regulaer"-Zweig (0 = Term entfaellt komplett, nicht nur abgeschwaecht). timeW=5
-// (bei "Kombiniert") ist experimentell, noch nicht empirisch feinjustiert: bei den vom
-// Training typischerweise erreichten Endgenauigkeiten (wenige cm) ist dist*dist*1000
-// schon nahe 0, ein kleiner Zeitueberschuss soll dort trotzdem den Ausschlag geben --
-// gleichzeitig soll die Zeitstrafe bei echten dist-Fehlern (>schon ein paar cm) nicht
-// dominieren. Bei timeW=5 entspricht 1s Zeitueberschuss ungefaehr 7cm dist-Fehler
-// (sqrt(5/1000)), 2s ungefaehr 14cm -- spuerbar, aber nicht Genauigkeit ueberstimmend.
-// Die Crash-Strafe (siehe noteFor) ist bei allen Varianten identisch -- sie ist eine
-// Sicherheitsschranke, kein didaktischer Vergleichsparameter.
-// timeW=50 (10x) und selbst timeW=1000 (200x) fuer "Starke Zeitstrafe" wurden
-// probeweise verworfen: unter der tatsaechlichen "beste von 5 Restarts"-Auswahl (wie
-// im trainBtn-Handler) ueberlappen die Ergebnis-Streubereiche noch zu stark, um in
-// einem einzelnen Trainingsklick zuverlaessig sichtbar zu sein. Erst timeW=10000
-// (2000x) liefert reproduzierbar (8/8 Testlaeufen) ein klar erkennbares, konsistent
-// hoeheres Spitzentempo als "Kombiniert" (~19.9-20 vs. 18.2-19.9 km/h Streubereich),
-// weiterhin ohne Crashes.
-const lossVariants = {
-  combined: { label: 'Kombiniert', distW: 1000, speedW: 100, timeW: 5 },
-  accuracy: { label: 'Genauigkeit', distW: 1000, speedW: 100, timeW: 0 },
-  // Gewichte gleichmaessig /100 gegenueber "Kombiniert" (10/1/100 statt 1000/100/10000):
-  // Sign-Gradient-Descent nutzt nur das Vorzeichen des Gradienten, eine gleichmaessige
-  // Skalierung aller drei Gewichte aendert also nichts am gefundenen (w,b) -- nur die
-  // Strafpunkte-Anzeige waere sonst um Groessenordnungen groesser als bei den anderen
-  // Varianten (Δt²·10000 dominiert bei typischem excess~0.1-0.3s alles andere), was bei
-  // nicht-technischen Usern verunsichert, obwohl das Ergebnis nicht "schlechter" ist.
-  urgent: { label: 'Starke Zeitstrafe', distW: 10, speedW: 1, timeW: 100 },
-  // Umgekehrte Gewichtung (Geschwindigkeit zaehlt staerker als Distanz): laut
-  // Grossstichproben-Test (N=200 Einzellaeufe ohne Restart-Auswahl) moderat
-  // zuverlaessiger als "Kombiniert" (0 statt 2/200 Crashes, kleinere Ausreisser),
-  // aber kein dramatischer Unterschied -- bei "beste von 5 Restarts" (wie im
-  // trainBtn-Handler) kaum sichtbar, da das ohnehin die meisten schlechten
-  // Einzelversuche aussortiert.
-  safety: { label: 'Sicherheit', distW: 100, speedW: 1000, timeW: 0 },
-};
-function noteFor(dist, speed, crashed, stopTime, minTime, loss) {
-  let note = dist * dist * loss.distW + speed * speed * loss.speedW;
-  if (crashed) {
-    note += 50000 + Math.abs(speed) * 5000;
-  } else if (loss.timeW > 0 && stopTime !== undefined && minTime !== undefined) {
-    const excess = Math.max(0, stopTime - minTime);
-    note += excess * excess * loss.timeW;
-  }
-  // Strafpunkte sind ohnehin eine erfundene Groesse (keine physikalische
-  // Einheit) -- x100, damit auch sehr kleine dist/speed-Unterschiede nahe
-  // der Wand als ganze Zahl sichtbar bleiben, statt beim Runden auf "0" zu
-  // verschwinden.
-  return note * 100;
-}
-
-function simulate(w, b, d0, maxAccel, loss) {
-  let dist = d0, speed = 0, t = 0, crashed = false;
-  const traj = [{ t, dist, speed, action: 0 }];
-  while (t < maxT - 1e-9) {
-    const action = hardTanh(w * (dist / d0) + b);
-    speed = Math.max(0, speed + (action * maxAccel - dragCoeff * speed) * dt);
-    dist -= speed * dt;
-    t += dt;
-    if (dist <= crashDist) {
-      crashed = true;
-      dist = 0;
-      traj.push({ t, dist, speed, action });
-      break;
-    }
-    traj.push({ t, dist, speed, action });
-  }
-  const last = traj[traj.length - 1];
-  const note = crashed
-    ? noteFor(last.dist, last.speed, crashed, undefined, undefined, loss)
-    : noteFor(last.dist, last.speed, crashed, stopTimeOf(traj), minTimeFor(maxAccel), loss);
-  return { traj, note, crashed };
-}
-
-function costOf(w, b, d0, maxAccel, loss) { return simulate(w, b, d0, maxAccel, loss).note; }
 
 const wallX = 620, carW = 60, roadStart = 40, usable = 520;
 function placeCar(dist, d0Val = d0, carId = 'car', crashed = false) {
@@ -527,9 +455,14 @@ function updateLossCaption() {
     terms.push('Δt²·' + loss.timeW);
     regulaerLabel += ' (Δt := Zeit über Vorgabe von ' + minTimeFor(maxAccelTrain).toFixed(1) + 's)';
   }
+  // crashW steht nur da, wenn es nicht 1 ist -- sonst stuende bei drei von vier
+  // Varianten ein "·1" in der Formel, das nichts erklaert.
+  const crashTerm = loss.crashW === 1
+    ? '50000 + |v|·5000'
+    : '(50000 + |v|·5000)·' + loss.crashW;
   lossFormulaCaption.innerHTML =
     regulaerLabel + ':<br>(' + terms.join(' + ') + ') · 100<br>' +
-    'bei Crash:<br>(v²·' + loss.speedW + ' + 50000 + |v|·5000) · 100';
+    'bei Crash:<br>(v²·' + loss.speedW + ' + ' + crashTerm + ') · 100';
 }
 updateLossCaption();
 
@@ -541,6 +474,7 @@ carClassBtnsTrain.forEach(function (btn) {
     setCarColor('car', btn.dataset.accel);
     updateLossCaption();
     checkTrainingStatus();
+    resetLandscapePaths();
   });
 });
 
@@ -551,6 +485,7 @@ lossBtnsTrain.forEach(function (btn) {
     activeLossKey = btn.dataset.loss;
     updateLossCaption();
     checkTrainingStatus();
+    resetLandscapePaths();
   });
 });
 
@@ -570,22 +505,10 @@ function onManualWB() {
 wInput.addEventListener('input', onManualWB);
 bInput.addEventListener('input', onManualWB);
 
-// "Lernen" heisst hier: ein einzelnes Neuron (2 Parameter w/b, siehe
-// simulate()) wird per Gradientenabstieg auf die Strafpunkte optimiert --
-// keine Backprop durch Schichten (dafuer gibt es hier keine), sondern ein
-// numerischer (finite-Differenzen-)Gradient auf costOf(), und davon nur das
-// Vorzeichen statt des Betrags (sign-gradient descent), siehe Begruendung
-// unten. Ein einzelner Trainingsversuch: Zufallssuche + Sign-Gradient-Descent.
-// Der zu optimierende Cost ist wegen des Crashs nicht stetig (kleine
-// Aenderungen an w/b koennen abrupt zwischen "crasht" und "crasht nicht"
-// umschlagen), daher ist der numerische Gradient oft lokal flach und der
-// Descent kann in einem mittelmaessigen Crash-Punkt haengen bleiben, obwohl
-// eine bessere Loesung existiert. Die aeussere Schleife im Klick-Handler
-// wiederholt diesen Versuch deshalb mehrfach und behaelt den besten.
 // Kurzbeschreibung, wie die Strafpunkte fuer ein (w,b)-Paar zustande kommen --
 // fuers Trainings-Log, damit "Strafpunkte=19" nicht als Blackbox-Zahl dasteht.
-function outcomeDetail(w, b, d0, maxAccel, loss) {
-  const r = simulate(w, b, d0, maxAccel, loss);
+function outcomeDetail(w, b, startDist, maxAccel, loss) {
+  const r = simulate(w, b, startDist, maxAccel, loss);
   const last = r.traj[r.traj.length - 1];
   if (r.crashed) {
     return 'Crash bei t=' + last.t.toFixed(1) + 's, v=' + (last.speed * 3.6).toFixed(3) + 'km/h';
@@ -602,84 +525,78 @@ function outcomeDetail(w, b, d0, maxAccel, loss) {
 // rechnet jede Zeile direkt mit der rohen Distanz in Metern -- w*(dist/d0)+b ist
 // aequivalent zu w'*dist+b. Wiederholt sonst dieselbe Physik-Schleife wie simulate(),
 // da deren traj-Eintraege die Zwischenwerte (z, v vor/nach Update) nicht mitfuehren.
-function logNeuronTrace(w, b, d0, maxAccel, lossLabel, logAreaEl) {
-  const wPrime = w / d0;
-  let dist = d0, speed = 0, t = 0;
-  const steps = [];
-  while (t < maxT - 1e-9) {
-    const z = wPrime * dist + b;
-    const action = hardTanh(z);
-    const vBefore = speed;
-    const vAfter = Math.max(0, speed + (action * maxAccel - dragCoeff * speed) * dt);
-    const distBefore = dist;
-    const tBefore = t;
-    const rawDistAfter = distBefore - vAfter * dt;
-    t += dt;
-    const crashedNow = rawDistAfter <= crashDist;
-    dist = crashedNow ? 0 : rawDistAfter;
-    speed = vAfter;
-    steps.push({ t: tBefore, distBefore, z, action, vBefore, vAfter, rawDistAfter, speed, crashedNow });
-    if (crashedNow) break;
-  }
-
+function logNeuronTrace(w, b, startDist, maxAccel, loss, logAreaEl) {
+  const wPrime = w / startDist;
+  const r = simulate(w, b, startDist, maxAccel, loss);
+  // traj[0] ist der Startzustand; jeder weitere Eintrag ist das Ergebnis eines
+  // Schritts und traegt dessen Zwischenwerte (z, dist/v davor) selbst mit -- deshalb
+  // rechnet diese Funktion nichts mehr nach, sie formatiert nur.
+  //
   // Gleiche "Ende der Trajektorie" wie beim Playback (stopIndexOf arbeitet nur auf
   // .speed): Zeilen nach dem tatsaechlichen Stillstand abschneiden, sonst spammt ein
   // laengst stehendes Auto das Log zu.
-  const trimmed = steps.slice(0, stopIndexOf(steps) + 1);
+  const steps = r.traj.slice(1, stopIndexOf(r.traj) + 1);
+  const lastIdx = r.traj.length - 1;
 
   logAreaEl.value +=
     'Neuron-Iteration für übernommenen Lauf:\n' +
-    '  Lossfunktion: ' + lossLabel + '\n' +
+    '  Lossfunktion: ' + loss.label + '\n' +
     '  w=' + w.toFixed(5) + ', b=' + b.toFixed(5) + ', maxAccel=' + maxAccel.toFixed(1) + 'm/s²\n' +
-    '  Normierung: w\' = w/d0 = ' + w.toFixed(5) + '/' + d0.toFixed(2) + ' = ' + wPrime.toFixed(5) + '\n' +
+    '  Normierung: w\' = w/d0 = ' + w.toFixed(5) + '/' + startDist.toFixed(2) + ' = ' + wPrime.toFixed(5) + '\n' +
     '  Formel: v\' = max(0, v + (Gas/Bremse·maxAccel − dragCoeff·v)·dt)\n' +
     '  Aktivierung: act(x) = hardTanh(x) = max(-1, min(1, x))\n';
-  trimmed.forEach(function (s, i) {
+  steps.forEach(function (s, i) {
     const sign = s.action >= 0 ? '+' : '';
     const vKmh = (s.vBefore * 3.6).toFixed(3);
-    const vAfterKmh = (s.vAfter * 3.6).toFixed(3);
+    const vAfterKmh = (s.speed * 3.6).toFixed(3);
+    const crashedNow = r.crashed && i === lastIdx - 1;
     logAreaEl.value +=
-      '\n  Schritt ' + i + ' (t=' + s.t.toFixed(1) + 's, dist=' + s.distBefore.toFixed(3) + 'm, v=' + s.vBefore.toFixed(3) + 'm/s (' + vKmh + 'km/h)):\n' +
+      '\n  Schritt ' + i + ' (t=' + (s.t - dt).toFixed(1) + 's, dist=' + s.distBefore.toFixed(3) + 'm, v=' + s.vBefore.toFixed(3) + 'm/s (' + vKmh + 'km/h)):\n' +
       '    z = w\'*dist+b = ' + wPrime.toFixed(5) + '·' + s.distBefore.toFixed(3) + ' + (' + b.toFixed(5) + ') = ' + s.z.toFixed(3) + ', act(z) = Gas/Bremse = ' + sign + s.action.toFixed(2) + '\n' +
-      '    v\' = max(0, ' + s.vBefore.toFixed(3) + ' + (' + sign + s.action.toFixed(2) + '·' + maxAccel.toFixed(1) + ' − ' + dragCoeff.toFixed(2) + '·' + s.vBefore.toFixed(3) + ')·' + dt.toFixed(1) + ') = ' + s.vAfter.toFixed(3) + 'm/s (' + vAfterKmh + 'km/h)\n' +
-      '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(3) + ' − ' + s.vAfter.toFixed(3) + '·' + dt.toFixed(1) + ' = ' + s.rawDistAfter.toFixed(3) + 'm' +
-      (s.crashedNow ? '  → Crash (dist ≤ ' + crashDist + 'm)\n' : '\n');
+      '    v\' = max(0, ' + s.vBefore.toFixed(3) + ' + (' + sign + s.action.toFixed(2) + '·' + maxAccel.toFixed(1) + ' − ' + dragCoeff.toFixed(2) + '·' + s.vBefore.toFixed(3) + ')·' + dt.toFixed(1) + ') = ' + s.speed.toFixed(3) + 'm/s (' + vAfterKmh + 'km/h)\n' +
+      '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(3) + ' − ' + s.speed.toFixed(3) + '·' + dt.toFixed(1) + ' = ' + s.rawDist.toFixed(3) + 'm' +
+      (crashedNow ? '  → Crash (dist ≤ ' + crashDist + 'm)\n' : '\n');
   });
   logAreaEl.scrollTop = 0;
 }
 
-function runOnce(d0, maxAccel, loss) {
-  let bestW = 0.5, bestB = -0.5, bestCost = costOf(bestW, bestB, d0, maxAccel, loss);
-  for (let k = 0; k < 60; k++) {
-    const rw = (Math.random() * 8 - 4), rb = (Math.random() * 6 - 3);
-    const c = costOf(rw, rb, d0, maxAccel, loss);
-    if (c < bestCost) { bestCost = c; bestW = rw; bestB = rb; }
-  }
-  let w = bestW, b = bestB;
-
-  let stepW = 0.25, stepB = 0.25;
-  const eps = 0.02, totalSteps = 350;
-  for (let step = 0; step < totalSteps; step++) {
-    const cw = (costOf(w + eps, b, d0, maxAccel, loss) - costOf(w - eps, b, d0, maxAccel, loss)) / (2 * eps);
-    const cb = (costOf(w, b + eps, d0, maxAccel, loss) - costOf(w, b - eps, d0, maxAccel, loss)) / (2 * eps);
-    w -= Math.sign(cw) * stepW;
-    b -= Math.sign(cb) * stepB;
-    w = Math.max(-6, Math.min(6, w));
-    b = Math.max(-4, Math.min(4, b));
-    stepW *= 0.98; stepB *= 0.98;
-
-    // Sign-Gradient-Descent hat kein Gedaechtnis: er kann von einer bereits
-    // guten Loesung in eine flache Zone abdriften (Gradient dort exakt 0,
-    // z.B. wenn das Auto nie anfaehrt) und dort haengen bleiben. Deshalb den
-    // besten je gesehenen Zustand separat mitfuehren statt nur den letzten.
-    const c = costOf(w, b, d0, maxAccel, loss);
-    if (c < bestCost) { bestCost = c; bestW = w; bestB = b; }
-  }
-  return { w: bestW, b: bestB, cost: bestCost };
-}
-
 function frameDelay(ms) {
   return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+// Restarts, deren Weg eine Grenze des Suchraums beruehrt, werden verworfen und neu
+// gezogen. Der Grund ist didaktisch: wMax = 6 ist eine willkuerlich gesetzte Zahl und
+// kein Teil der Aufgabe -- ein Weg, der sich an diese Wand presst, erzaehlt etwas ueber
+// unsere Box und nichts ueber das Lernen. Dass es ueberhaupt vorkommt, liegt daran,
+// dass die Kosten entlang des Tals monoton zu groesserem w fallen: in w gibt es gar
+// kein inneres Minimum, das Optimum laege bei w gegen unendlich.
+//
+// Der Preis ist gemessen und klein. Betroffen sind 22% der Versuche (und zwar allein
+// ueber wMax -- wMin, bMin und bMax werden in 1600 Laeufen nie beruehrt), das kostet
+// im Mittel 1.3 Anlaeufe je Restart. Die verworfenen sind im Median sogar die
+// *besseren* (10 statt 15 Strafpunkte bei "Kombiniert"), aber beide halten bei 1cm
+// Restabstand zur Vorgabezeit an -- der Unterschied ist kosmetisch, das Fahrverhalten
+// identisch.
+//
+// Bewusst hier und nicht in runOnce(): das ist eine Darstellungsentscheidung, keine
+// Eigenschaft des Verfahrens. scripts/parking-selftest.js misst weiter ungefiltert,
+// sonst wuerden die dokumentierten Zahlen von der Wirklichkeit abdriften.
+const MAX_ANLAEUFE = 10;
+function runOnceImInneren(startDist, maxAccel, loss) {
+  let r = null;
+  for (let versuch = 0; versuch < MAX_ANLAEUFE; versuch++) {
+    r = runOnce(startDist, maxAccel, loss);
+    let amRand = false;
+    for (let i = 0; i < r.path.length; i++) {
+      const q = r.path[i];
+      if (q.w >= wMax - 1e-9 || q.w <= wMin + 1e-9 || q.b >= bMax - 1e-9 || q.b <= bMin + 1e-9) {
+        amRand = true;
+        break;
+      }
+    }
+    if (!amRand) return r;
+  }
+  return r;   // nach 10 Fehlversuchen nehmen, was da ist (~1e-6 wahrscheinlich)
 }
 
 trainBtn.addEventListener('click', async function () {
@@ -697,25 +614,39 @@ trainBtn.addEventListener('click', async function () {
 
   // Mehrere unabhaengige Trainingsversuche, bester gewinnt: schuetzt gegen
   // einen einzelnen ungluecklichen Versuch, der in einem mittelmaessigen
-  // Crash-Punkt haengen bleibt (siehe Kommentar bei runOnce). Die kuenstliche
-  // Pause zwischen den Restarts gibt es nur, damit man dem Training ueberhaupt
-  // zuschauen kann -- die Rechnung selbst ist in wenigen Millisekunden fertig.
+  // Crash-Punkt haengen bleibt (siehe Kommentar bei runOnce). Die Pause zwischen den
+  // Restarts gibt es, damit man dem Training zuschauen kann -- die Rechnung selbst ist
+  // in wenigen Millisekunden fertig. Sie traegt jetzt auch Inhalt: in ihr wird der Weg
+  // des gerade gelaufenen Restarts in die Landschaft gezeichnet.
   const restarts = 5;
   let best = null, bestIndex = -1;
+  landscapeRuns = [];
+  landscapeBestIndex = -1;
   for (let i = 0; i < restarts; i++) {
-    const r = runOnce(d0, maxAccelTrain, loss);
+    const r = runOnceImInneren(d0, maxAccelTrain, loss);
     if (!best || r.cost < best.cost) { best = r; bestIndex = i + 1; }
     logArea.value += 'Restart ' + (i + 1) + '/' + restarts + ':  w=' + r.w.toFixed(3) + '  b=' + r.b.toFixed(2) + '  Strafpunkte=' + Math.round(r.cost) + ' (' + outcomeDetail(r.w, r.b, d0, maxAccelTrain, loss) + ')\n';
     logArea.scrollTop = logArea.scrollHeight;
+    landscapeRuns.push(r);
+    refreshLandscape();
     await frameDelay(300);
   }
   logArea.value += '→ übernommen: Restart ' + bestIndex + '/' + restarts + '\n';
+  // Jetzt erst steht der Gewinner fest: neu zeichnen, damit er hervorgehoben ist und
+  // nicht mehr der zuletzt gelaufene Restart. Zoomstufe 3 zentriert sich dabei auf das
+  // Ergebnis -- bewusst erst hier und nicht nach jedem Restart, sonst spraenge ihr
+  // Ausschnitt waehrend der Animation fuenfmal und verschoebe die eben gezeichneten
+  // Wege unter dem Zuschauer weg.
+  landscapeBestIndex = bestIndex - 1;
+  landscapeFocus = { w: best.w, b: best.b };
+  landscapeFitted = fitViewTo(document.getElementById('landscape3'), best.path, 0.06);
+  refreshLandscape();
   // Waehrend der Restarts folgt der Scroll dem Zuwachs (scrollHeight), damit man live
   // zuschauen kann -- nach Abschluss soll die Box aber von vorne lesbar sein, nicht am
   // Ende der letzten Zeile stehen bleiben.
   logArea.scrollTop = 0;
 
-  logNeuronTrace(best.w, best.b, d0, maxAccelTrain, loss.label, logAreaTrace);
+  logNeuronTrace(best.w, best.b, d0, maxAccelTrain, loss, logAreaTrace);
 
   // Hohe Praezision hier, nicht nur kosmetisch gerundet: das System reagiert
   // nahe der Crash-Schwelle empfindlich auf kleine w/b-Aenderungen (siehe
@@ -802,6 +733,518 @@ function renderDistChart(traj, chartEl = distChart, wrapEl = distChartWrap) {
   });
 }
 
+// rafId der Trainings-Animation, damit setTab() sie beim Verlassen des Tabs stoppen
+// kann -- sonst laeuft sie im versteckten Panel weiter (das Self-Drive-Panel hat mit
+// sdOnLeave laengst ein Gegenstueck dafuer).
+let playRafId = null;
+
+// ---- Strafpunkte-Landschaft ueber (w,b) ----
+// Das Training optimiert genau zwei Zahlen, also laesst sich die komplette Kostenflaeche
+// ausrechnen und hinmalen. Bei einem Netz mit tausenden Parametern ist "Loss-Landschaft"
+// immer nur eine Karikatur -- hier ist sie exakt, und das ist das Einzige, was diese
+// Mini-Demo zeigen kann, was groessere nicht koennen.
+//
+// Drei Ausschnitte mit zunehmender Vergroesserung, weil eine einzelne Karte zu wenig
+// hergibt: im ganzen Suchraum sind nur 8.9% der Flaeche brauchbar, das Tal ist ein
+// duenner Streifen, und die Klippe nur eine Kante zwischen zwei Farben. Erst die
+// dritte Stufe zeigt, worum es geht -- dort liegen zwischen zwei benachbarten
+// Rasterpunkten 13 und 5.213.075 Strafpunkte, waehrend der Verlauf davor glatt ist.
+//
+// Standardmaessig zugeklappt: offen zieht die Landschaft alle Aufmerksamkeit auf sich
+// und man sieht zuerst sie statt des Neurons, um das es eigentlich geht.
+const LS_GW = 160, LS_GH = 100;
+const LS_PAD = { left: 40, right: 12, top: 12, bottom: 30 };
+const LS_CACHE_MAX = 24;
+const landscapeCache = {};
+const landscapeDetails = document.getElementById('landscapeDetails');
+const lsFocusLabel = document.getElementById('lsFocusLabel');
+
+// Ein Rasterbild pro (Fahrzeugklasse, Lossfunktion, Ausschnitt). Der Ausschnitt gehoert
+// in den Key, weil Stufe 3 ihren mit jedem Training wechselt -- und genau deshalb ist
+// der Cache gedeckelt, sonst waechst er unbegrenzt mit.
+function landscapeImage(maxAccel, lossKey, view) {
+  const key = maxAccel + ':' + lossKey + ':' + view.w0.toFixed(4) + ',' + view.w1.toFixed(4)
+    + ',' + view.b0.toFixed(4) + ',' + view.b1.toFixed(4);
+  if (landscapeCache[key]) return landscapeCache[key];
+  const loss = lossVariants[lossKey];
+  const kind = new Uint8Array(LS_GW * LS_GH);   // 0 brauchbar, 1 Crash, 2 faehrt nicht los
+  const note = new Float64Array(LS_GW * LS_GH);
+  for (let i = 0; i < LS_GW; i++) {
+    const w = view.w0 + (view.w1 - view.w0) * i / (LS_GW - 1);
+    for (let j = 0; j < LS_GH; j++) {
+      const b = view.b0 + (view.b1 - view.b0) * j / (LS_GH - 1);
+      const r = simulate(w, b, d0, maxAccel, loss);
+      let moved = false;
+      for (let k = 0; k < r.traj.length; k++) { if (r.traj[k].speed > 0.3) { moved = true; break; } }
+      const idx = j * LS_GW + i;
+      note[idx] = r.note;
+      kind[idx] = r.crashed ? 1 : (moved ? 0 : 2);
+    }
+  }
+
+  const off = document.createElement('canvas');
+  off.width = LS_GW; off.height = LS_GH;
+  const octx = off.getContext('2d');
+  const img = octx.createImageData(LS_GW, LS_GH);
+
+  // Eingefaerbt wird nach *Rangfolge*, nicht nach Betrag -- auch nicht logarithmisch.
+  // Grund: "brauchbar" heisst nur "faehrt los und crasht nicht", und davon bleibt das
+  // meiste 19m vor der Wand stehen. Der Median liegt dadurch bei ueber 5 Mio
+  // Strafpunkten, die Spanne betraegt 6.4 Groessenordnungen, und selbst auf einer
+  // log-Rampe laegen nur 0.4% der Flaeche im unteren Viertel: das ganze Gebiet saehe
+  // einfarbig weiss aus. Ueber den Rang nutzt die Rampe ihren vollen Umfang.
+  //
+  // Die Rangfolge wird je Ausschnitt neu gebildet, nicht global. Sonst waere Stufe 3
+  // einfarbig, denn ihre Punkte liegen global alle im besten Prozent. Der Preis ist,
+  // dass dieselbe Farbe in verschiedenen Karten Verschiedenes bedeutet -- das sagt
+  // die Legende dazu.
+  const sorted = [];
+  for (let k = 0; k < kind.length; k++) if (kind[k] === 0) sorted.push(note[k]);
+  sorted.sort(function (a, b) { return a - b; });
+  function rankOf(v) {
+    let lo2 = 0, hi2 = sorted.length - 1;
+    while (lo2 < hi2) { const mid = (lo2 + hi2) >> 1; if (sorted[mid] < v) lo2 = mid + 1; else hi2 = mid; }
+    return sorted.length > 1 ? lo2 / (sorted.length - 1) : 0;
+  }
+
+  for (let i = 0; i < LS_GW; i++) {
+    for (let j = 0; j < LS_GH; j++) {
+      const idx = j * LS_GW + i;
+      // Bildzeile 0 ist oben, b waechst nach oben -- deshalb j spiegeln.
+      const px = ((LS_GH - 1 - j) * LS_GW + i) * 4;
+      let cr, cg, cb2;
+      if (kind[idx] === 1) { cr = 217; cg = 137; cb2 = 123; }
+      else if (kind[idx] === 2) { cr = 216; cg = 216; cb2 = 212; }
+      else {
+        const f = rankOf(note[idx]);
+        const c3 = lsRamp(f);
+        cr = c3[0]; cg = c3[1]; cb2 = c3[2];
+      }
+      img.data[px] = cr; img.data[px + 1] = cg; img.data[px + 2] = cb2; img.data[px + 3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  landscapeCache[key] = off;
+  const keys = Object.keys(landscapeCache);
+  if (keys.length > LS_CACHE_MAX) delete landscapeCache[keys[0]];
+  return off;
+}
+
+// Achsenmarken fuer einen beliebigen Ausschnitt: die Stufen reichen von 12 Einheiten
+// (ganzer Suchraum) bis 0.6 (Klippe), eine feste Schrittweite passt da nirgends.
+function niceTicks(lo, hi) {
+  const steps = [0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10];
+  let step = steps[steps.length - 1];
+  for (let i = 0; i < steps.length; i++) { if ((hi - lo) / steps[i] <= 7) { step = steps[i]; break; } }
+  const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  const first = Math.ceil(lo / step - 1e-9) * step;
+  const out = [];
+  for (let k = 0; first + k * step <= hi + 1e-9; k++) {
+    let v = first + k * step;
+    if (Math.abs(v) < step * 1e-6) v = 0;   // sonst steht da "-0.0"
+    out.push({ v: v, label: v.toFixed(dec) });
+  }
+  return out;
+}
+
+// Der Canvas hat feste 680x320 Bildpunkte, wird per CSS aber auf die Spaltenbreite
+// gezogen -- auf einem 390px-Telefon also auf die halbe Groesse. Ohne Gegenrechnung
+// schrumpft die 11px-Achsenbeschriftung dort auf 5.6px und ist nicht mehr zu lesen.
+// lsScale liefert den Faktor, mit dem alles multipliziert wird, was auf dem Bildschirm
+// konstant gross bleiben soll: Schrift, Raender, Linienstaerken, Marker.
+function lsScale(canvas) {
+  const shown = canvas.getBoundingClientRect().width;
+  return shown > 0 ? Math.max(1, canvas.width / shown) : 1;
+}
+function lsRect(canvas, k) {
+  return {
+    x: LS_PAD.left * k, y: LS_PAD.top * k,
+    w: canvas.width - (LS_PAD.left + LS_PAD.right) * k,
+    h: canvas.height - (LS_PAD.top + LS_PAD.bottom) * k,
+  };
+}
+function lsX(view, r, w) { return r.x + (w - view.w0) / (view.w1 - view.w0) * r.w; }
+function lsY(view, r, b) { return r.y + (1 - (b - view.b0) / (view.b1 - view.b0)) * r.h; }
+
+// Farbrampe fuer das brauchbare Gebiet, dunkel = gut. Mehrere Stuetzstellen statt
+// einer geraden Blau-Interpolation: ueber Helligkeit *und* Farbton laufend zeigt sie
+// erheblich mehr Struktur, und das ist hier der ganze Zweck -- eingefaerbt wird nach
+// Rangfolge, die Rampe wird also immer voll ausgenutzt, ihr Umfang ist damit das
+// Einzige, was die Unterschiede sichtbar macht.
+//
+// Der helle Pol ist gruenlich, nicht fast weiss: sonst waere die Grenze zum grauen
+// "faehrt nicht los" nicht mehr zu sehen, obwohl es zwei voellig verschiedene
+// Ausgaenge sind. Gegen das Lachsrot des Crash-Gebiets steht die ganze Rampe klar ab.
+const LS_RAMPE = [
+  [  8,  36,  60],   // sehr dunkles Marineblau -- die besten Punkte
+  [ 23,  94, 133],
+  [ 62, 160, 140],
+  [207, 224, 160],   // blasses Salbeigruen -- die schlechtesten
+];
+function lsRamp(f) {
+  const t = Math.min(0.9999, Math.max(0, f)) * (LS_RAMPE.length - 1);
+  const i = Math.floor(t), q = t - i;
+  const a = LS_RAMPE[i], b = LS_RAMPE[i + 1];
+  return [Math.round(a[0] + (b[0] - a[0]) * q),
+          Math.round(a[1] + (b[1] - a[1]) * q),
+          Math.round(a[2] + (b[2] - a[2]) * q)];
+}
+
+// Kreuz an einem Auswertungspunkt -- wie die Linie erst weiss, dann farbig, damit es
+// auf grauem, rotem und dunkelblauem Untergrund gleichermassen lesbar bleibt.
+function lsCross(ctx, x, y, size, color) {
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - size, y - size); ctx.lineTo(x + size, y + size);
+  ctx.moveTo(x + size, y - size); ctx.lineTo(x - size, y + size);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = size * 1.25; ctx.stroke();
+  ctx.strokeStyle = color; ctx.lineWidth = size * 0.5; ctx.stroke();
+  ctx.lineCap = 'butt';
+}
+
+function lsMarker(ctx, view, r, w, b, fill, radius) {
+  ctx.beginPath();
+  ctx.arc(lsX(view, r, w), lsY(view, r, b), radius || 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.lineWidth = (radius || 4.5) / 3; ctx.strokeStyle = '#fff'; ctx.stroke();
+}
+
+// runs: die bisherigen Restart-Ergebnisse (mit .path). bestIndex hebt den uebernommenen
+// hervor; waehrend des Trainings steht der Gewinner noch nicht fest, dann markiert -1
+// schlicht den zuletzt gelaufenen.
+function renderLandscapePanel(canvas, view, runs, bestIndex, stil) {
+  const ctx = canvas.getContext('2d');
+  // Hoehe vor allem anderen setzen: das Zuweisen setzt die Leinwand zurueck.
+  if (view.hoehe && canvas.height !== view.hoehe) canvas.height = view.hoehe;
+  const k = lsScale(canvas);
+  const r = lsRect(canvas, k);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(landscapeImage(maxAccelTrain, activeLossKey, view), r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = '#ddd'; ctx.lineWidth = k;
+  ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+
+  ctx.fillStyle = '#555'; ctx.font = Math.round(11 * k) + 'px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  niceTicks(view.w0, view.w1).forEach(function (t) { ctx.fillText(t.label, lsX(view, r, t.v), r.y + r.h + 4 * k); });
+  ctx.fillText('w', r.x + r.w / 2, r.y + r.h + 17 * k);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  niceTicks(view.b0, view.b1).forEach(function (t) { ctx.fillText(t.label, r.x - 5 * k, lsY(view, r, t.v)); });
+  ctx.textAlign = 'left';
+  ctx.fillText('b', 2 * k, r.y + 6 * k);
+
+  // Reicht der Ausschnitt ueber den Suchraum hinaus (nur bei Zoomstufe 3 moeglich),
+  // die Grenze einzeichnen -- sonst waere nicht erklaerbar, warum der Abstieg dort
+  // stehen bleibt, obwohl es sichtbar weiter bergab ginge.
+  ctx.save();
+  ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  [wMin, wMax].forEach(function (limit) {
+    if (limit <= view.w0 || limit >= view.w1) return;
+    const x = lsX(view, r, limit);
+    ctx.setLineDash([5 * k, 4 * k]);
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1.2 * k;
+    ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x, r.y + r.h); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#555'; ctx.textAlign = limit === wMax ? 'right' : 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Suchraumgrenze', x + (limit === wMax ? -4 * k : 4 * k), r.y + 4 * k);
+  });
+  ctx.restore();
+
+  // In der Klippenkarte steht statt der Linie an jedem Auswertungspunkt ein Kreuz.
+  // Eine Linie liest man als Fahrspur, und dann wirkt es unerklaerlich, dass der
+  // Abstieg "auf dem Weg zur Klippe" nicht frueher abbiegt: es gibt keinen Weg, nur
+  // Spruenge, und dazwischen kennt er nichts.
+  //
+  // Ausgeduennt, sobald zwei Kreuze naeher als lsMinSep aneinander liegen -- gegen
+  // Ende schrumpft die Schrittweite auf Bruchteile eines Pixels, dort wuerden sich
+  // hunderte Kreuze zu einem Klumpen addieren.
+  const lsMinSep = 7 * k;
+  const pts = [];
+
+  // In den Zoomstufen laufen die Wege sonst ueber die Achsen hinaus.
+  ctx.save();
+  ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+  const list = runs || [];
+  // Der uebernommene Weg wird zuletzt gezeichnet, damit ihn die uebrigen nicht
+  // ueberdecken -- er ist der, auf den es ankommt.
+  const hervor = bestIndex < 0 ? list.length - 1 : bestIndex;
+  const reihenfolge = list.map(function (_, i) { return i; })
+    .sort(function (a, b) { return (a === hervor ? 1 : 0) - (b === hervor ? 1 : 0); });
+  reihenfolge.forEach(function (i) {
+    const run = list[i];
+    const highlighted = i === hervor;
+    const color = highlighted ? '#D85A30' : '#8E44AD';
+    ctx.save();
+    if (stil === 'linie') {
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let n = 0; n < run.path.length; n++) {
+        const x = lsX(view, r, run.path[n].w), y = lsY(view, r, run.path[n].b);
+        if (n === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      // Erst ein weisser Halo, dann die Farbe darauf: der Weg laeuft ueber graue, rote
+      // und dunkelblaue Flaechen, auf denen keine einzelne Linienfarbe ueberall lesbar
+      // waere.
+      ctx.globalAlpha = highlighted ? 0.9 : 0.5;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = (highlighted ? 4.5 : 3) * k;
+      ctx.stroke();
+      ctx.globalAlpha = highlighted ? 1 : 0.65;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = (highlighted ? 2.2 : 1.2) * k;
+      ctx.stroke();
+    }
+
+    // Ausgeduennt ueber ein Raster, nicht gegen das zuletzt gezeichnete Kreuz: der Weg
+    // pendelt, Punkt n+2 landet also wieder auf Punkt n, waehrend n+1 weit weg war --
+    // eine Pruefung nur gegen den Vorgaenger laesst jeden Punkt durch und die dichten
+    // Stellen verschmelzen zu weissen Klumpen. Pro Weg ein eigenes Raster, damit ein
+    // Kreuz nicht wegfaellt, nur weil ein andersfarbiges daneben liegt.
+    const belegt = {};
+    ctx.globalAlpha = highlighted ? 1 : 0.7;
+    for (let n = 0; n < run.path.length; n++) {
+      const x = lsX(view, r, run.path[n].w), y = lsY(view, r, run.path[n].b);
+      if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
+      // Treffer fuer den Tooltip sammeln wir immer -- auch dort, wo kein Kreuz
+      // gezeichnet wird, soll sich der Punkt abfragen lassen.
+      pts.push({ x: x, y: y, run: i, step: n, total: run.path.length,
+                 w: run.path[n].w, b: run.path[n].b, kind: 'path' });
+      if (stil !== 'kreuze') continue;
+      const zelle = Math.round(x / lsMinSep) + ',' + Math.round(y / lsMinSep);
+      if (belegt[zelle]) continue;
+      belegt[zelle] = true;
+      lsCross(ctx, x, y, 3.5 * k, color);
+    }
+    ctx.restore();
+
+    // Startpunkt jedes Restarts hohl (weiss), damit Anfang und Ende unterscheidbar
+    // sind und sichtbar wird, wie weit die Zufallssuche gestreut hat.
+    lsMarker(ctx, view, r, run.path[0].w, run.path[0].b, '#fff', (highlighted ? 4.5 : 3) * k);
+    pts.push({ x: lsX(view, r, run.path[0].w), y: lsY(view, r, run.path[0].b), run: i,
+               step: 0, total: run.path.length, w: run.path[0].w, b: run.path[0].b, kind: 'start' });
+  });
+  if (bestIndex >= 0 && list[bestIndex]) {
+    const bw = list[bestIndex].w, bb = list[bestIndex].b;
+    lsMarker(ctx, view, r, bw, bb, '#D85A30', 4.5 * k);
+    pts.push({ x: lsX(view, r, bw), y: lsY(view, r, bb), run: bestIndex,
+               step: list[bestIndex].bestStep, total: list[bestIndex].path.length,
+               w: bw, b: bb, kind: 'best' });
+  }
+  ctx.restore();
+
+  // Fuer den Tooltip: nur Punkte, die tatsaechlich im Zeichenrechteck liegen.
+  canvas._lsPoints = pts.filter(function (q) {
+    return q.x >= r.x && q.x <= r.x + r.w && q.y >= r.y && q.y <= r.y + r.h;
+  });
+}
+
+// Groesseres b heisst mehr Gas heisst irgendwann Crash. Gesucht ist das groesste b bei
+// gegebenem w, das noch nicht crasht -- der Mittelpunkt fuer Zoomstufe 3, solange noch
+// kein Training gelaufen ist. Haengt nur von w und maxAccel ab, nicht von der
+// Lossfunktion: "crashed" ist eine Eigenschaft der Simulation, nicht der Bewertung.
+const cliffCache = {};
+function cliffBAt(w, maxAccel) {
+  const key = w + ':' + maxAccel;
+  if (cliffCache[key] !== undefined) return cliffCache[key];
+  const loss = lossVariants.combined;
+  let lo = bMin, hi = bMax;
+  if (simulate(w, lo, d0, maxAccel, loss).crashed) return (cliffCache[key] = lo);
+  if (!simulate(w, hi, d0, maxAccel, loss).crashed) return (cliffCache[key] = hi);
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (simulate(w, mid, d0, maxAccel, loss).crashed) hi = mid; else lo = mid;
+  }
+  return (cliffCache[key] = lo);
+}
+
+// Zoomstufe 3 wird nach dem Training auf den uebernommenen Lauf zugeschnitten: das
+// Fenster ist genau seine Bounding-Box plus ein schmaler Rand. Start- und Bestpunkt
+// liegen damit zwangslaeufig drin (beide sind Punkte des Pfades), und es bleibt kein
+// Drumherum uebrig, das nichts zeigt. Gemessen ist der uebernommene Lauf kompakt
+// (Median 0.63 x 0.25) -- gerade der Restart gewinnt ja, dessen Zufallsstart schon
+// nah lag; die weit abliegenden Starts gehoeren den verlierenden Restarts.
+//
+// Statt das Fenster auf ein festes Seitenverhaeltnis aufzublasen (kostet im Median
+// 1.41x, im Extremfall 3.85x Flaeche) waechst die Leinwand mit: die Hoehe folgt dem
+// Fenster, dadurch wird nichts verzerrt und nichts zugegeben. Nur wenn die Hoehe aus
+// den Grenzen unten liefe, wird das Fenster in der knappen Richtung aufgeweitet --
+// das betrifft rund ein Fuenftel der Laeufe, im Median mit Faktor 1.00.
+const LS_H_MIN = 220, LS_H_MAX = 560;
+let landscapeFocus = null;      // Ersatzmittelpunkt, solange kein Lauf vorliegt
+let landscapeFitted = null;     // zugeschnittenes Fenster des uebernommenen Laufs
+
+function currentFocus() {
+  return landscapeFocus || { w: 5.0, b: cliffBAt(5.0, maxAccelTrain) };
+}
+
+function fitViewTo(canvas, path, rand) {
+  let w0 = Infinity, w1 = -Infinity, b0 = Infinity, b1 = -Infinity;
+  for (let i = 0; i < path.length; i++) {
+    if (path[i].w < w0) w0 = path[i].w;
+    if (path[i].w > w1) w1 = path[i].w;
+    if (path[i].b < b0) b0 = path[i].b;
+    if (path[i].b > b1) b1 = path[i].b;
+  }
+  const mw = (w0 + w1) / 2, mb = (b0 + b1) / 2;
+  let sw = Math.max(w1 - w0, 1e-4) * (1 + 2 * rand);
+  let sb = Math.max(b1 - b0, 1e-4) * (1 + 2 * rand);
+  // Seitenverhaeltnis bei k=1 gerechnet; auf schmalen Bildschirmen weicht es um
+  // wenige Prozent ab, das faellt nicht auf.
+  const plotW = canvas.width - LS_PAD.left - LS_PAD.right;
+  const padV = LS_PAD.top + LS_PAD.bottom;
+  let plotH = plotW * sb / sw;
+  if (plotH + padV > LS_H_MAX) { const neu = LS_H_MAX - padV; sw *= plotH / neu; plotH = neu; }
+  else if (plotH + padV < LS_H_MIN) { const neu = LS_H_MIN - padV; sb *= neu / plotH; plotH = neu; }
+  return { w0: mw - sw / 2, w1: mw + sw / 2, b0: mb - sb / 2, b1: mb + sb / 2,
+           hoehe: Math.round(plotH + padV) };
+}
+
+function focusView() {
+  if (landscapeFitted) return landscapeFitted;
+  // Solange kein Lauf vorliegt: fest um die Klippe bei w=5. Bewusst nicht auf den
+  // Suchraum beschnitten -- das Tal laeuft jenseits von wMax weiter, und die Grenze
+  // selbst wird als Linie eingezeichnet.
+  const f = currentFocus(), halfW = 0.5, halfB = 0.3;
+  return { w0: f.w - halfW, w1: f.w + halfW, b0: f.b - halfB, b1: f.b + halfB, hoehe: 320 };
+}
+
+// stil: In den beiden Uebersichtskarten ist die Linie das Richtige -- dort liegen die
+// Auswertungspunkte so dicht, dass einzelne Kreuze nur ein Gewimmel ergaeben, und man
+// will den Verlauf als Ganzes sehen. In der Klippenkarte ist sie schaedlich: dort geht
+// es genau darum, dass der Abstieg *springt* und zwischen zwei Punkten nichts kennt.
+// Eine Linie behauptet dort eine Bewegung, die nicht stattfindet.
+const LS_VIEWS = [
+  { id: 'landscape1', stil: 'linie', view: function () { return { w0: wMin, w1: wMax, b0: bMin, b1: bMax }; } },
+  { id: 'landscape2', stil: 'linie', view: function () { return { w0: -1.0, w1: 6.0, b0: -3.0, b1: 2.0 }; } },
+  { id: 'landscape3', stil: 'kreuze', view: focusView },
+];
+
+// Die drei Karten kosten zusammen ~150ms. Gerechnet wird deshalb erst, wenn der
+// Trainings-Tab sichtbar *und* der Bereich aufgeklappt ist. Waehrend eines Trainings
+// bei zugeklapptem Bereich werden die Pfade trotzdem gesammelt -- wer danach
+// aufklappt, sieht sie.
+let landscapeDirty = true;
+let landscapeRuns = [];
+let landscapeBestIndex = -1;
+// Die eingezeichneten Wege gehoeren immer zu genau einer (Fahrzeugklasse,
+// Lossfunktion). Wechselt eine davon, muessen sie weg -- sonst laegen Pfade auf einer
+// Karte, auf der sie nie gelaufen sind -- und Stufe 3 faellt auf den Ersatzmittelpunkt
+// der neuen Klasse zurueck.
+function resetLandscapePaths() {
+  landscapeRuns = [];
+  landscapeBestIndex = -1;
+  landscapeFocus = null;
+  landscapeFitted = null;
+  refreshLandscape();
+}
+function refreshLandscape() {
+  if (document.getElementById('trainingPanel').hidden || !landscapeDetails.open) {
+    landscapeDirty = true;
+    return;
+  }
+  landscapeDirty = false;
+  const fv = focusView();
+  lsFocusLabel.textContent = landscapeFitted
+    ? '(w ' + fv.w0.toFixed(2) + '…' + fv.w1.toFixed(2) + ' · b ' + fv.b0.toFixed(2) + '…' + fv.b1.toFixed(2) + ')'
+    : '(noch kein Lauf — auf die Klippe bei w = 5 zentriert)';
+  LS_VIEWS.forEach(function (v) {
+    renderLandscapePanel(document.getElementById(v.id), v.view(), landscapeRuns, landscapeBestIndex, v.stil);
+  });
+}
+landscapeDetails.addEventListener('toggle', function () {
+  if (landscapeDetails.open) refreshLandscape();
+});
+// Beim Drehen des Telefons aendert sich der Skalierungsfaktor aus lsScale() -- ohne
+// Neuzeichnen stuenden Schrift und Raender in der falschen Groesse da. Die Rasterbilder
+// liegen im Cache, es kostet also nur das Zeichnen.
+let lsResizeTimer = null;
+window.addEventListener('resize', function () {
+  clearTimeout(lsResizeTimer);
+  lsResizeTimer = setTimeout(refreshLandscape, 150);
+});
+
+// ---- Tooltip an den Auswertungspunkten ----
+// Ein Canvas hat keine Kindelemente, also kein natives title-Attribut -- Treffer werden
+// von Hand gegen die beim Zeichnen gesammelten Bildpunkte geprueft. Start- und
+// Ergebnispunkt gewinnen gegen einen gleich nahen Wegpunkt, sie sind das eigentliche
+// Ziel des Zeigens.
+const lsTooltip = document.getElementById('lsTooltip');
+
+function lsHit(canvas, clientX, clientY) {
+  const pts = canvas._lsPoints;
+  if (!pts || !pts.length) return null;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return null;
+  const sx = canvas.width / rect.width, sy = canvas.height / rect.height;
+  const cx = (clientX - rect.left) * sx, cy = (clientY - rect.top) * sy;
+  const maxD = 13 * sx;
+  // Start- und Ergebnismarker sind groesser gezeichnet und bekommen deshalb einen
+  // kleinen Vorsprung -- aber keinen Vorrang: mit hartem Vorrang waeren alle Wegpunkte
+  // in ihrer Naehe unerreichbar, und genau die will man ja einzeln antippen koennen.
+  const vorsprung = 4 * sx;
+  let treffer = null, best = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const dx = pts[i].x - cx, dy = pts[i].y - cy;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d > maxD) continue;
+    const gewichtet = d - (pts[i].kind === 'path' ? 0 : vorsprung);
+    if (gewichtet < best) { best = gewichtet; treffer = pts[i]; }
+  }
+  return treffer;
+}
+
+function lsTooltipText(p) {
+  const note = Math.round(costOf(p.w, p.b, d0, maxAccelTrain, lossVariants[activeLossKey]));
+  const kopf = p.kind === 'start'
+    ? 'Restart ' + (p.run + 1) + ' · Startwert aus der Zufallssuche'
+    : p.kind === 'best'
+      // Die Iteration steht bewusst dabei: der Bestwert faellt im Median schon bei
+      // Schritt 254 von 350, die restlichen rund 96 Iterationen bringen nichts mehr.
+      // Ohne die Zahl sieht man der Anzeige nicht an, dass der Lauf laengst fertig war.
+      ? 'Restart ' + (p.run + 1) + ' · übernommenes Ergebnis\ngefunden bei Schritt '
+        + p.step + ' von ' + (p.total - 1)
+      : 'Restart ' + (p.run + 1) + ' · Schritt ' + p.step + ' von ' + (p.total - 1);
+  return kopf + '\nw = ' + p.w.toFixed(5) + '\nb = ' + p.b.toFixed(5)
+    + '\nStrafpunkte = ' + note;
+}
+
+function lsShowTooltip(p, clientX, clientY) {
+  lsTooltip.textContent = lsTooltipText(p);
+  lsTooltip.hidden = false;
+  // Erst einblenden, dann messen -- vorher hat das Element keine Groesse. Nach links
+  // bzw. oben kippen, wenn es sonst aus dem Fenster liefe.
+  const box = lsTooltip.getBoundingClientRect();
+  let x = clientX + 14, y = clientY + 14;
+  if (x + box.width > window.innerWidth - 6) x = clientX - box.width - 14;
+  if (y + box.height > window.innerHeight - 6) y = clientY - box.height - 14;
+  lsTooltip.style.left = Math.max(6, x) + 'px';
+  lsTooltip.style.top = Math.max(6, y) + 'px';
+}
+
+LS_VIEWS.forEach(function (v) {
+  const canvas = document.getElementById(v.id);
+  function zeige(e) {
+    const p = lsHit(canvas, e.clientX, e.clientY);
+    if (p) { lsShowTooltip(p, e.clientX, e.clientY); canvas.style.cursor = 'crosshair'; }
+    else { lsTooltip.hidden = true; canvas.style.cursor = ''; }
+  }
+  canvas.addEventListener('pointermove', zeige);
+  // Auf dem Handy gibt es kein Hover -- gedrueckt halten muss denselben Dienst tun,
+  // dieselbe Geste wie bei den Gas-/Bremspedalen im Self-Drive-Tab.
+  canvas.addEventListener('pointerdown', zeige);
+  function versteckeBeiBeruehrung(e) {
+    // Bei der Maus uebernimmt pointerleave; wuerde pointerup dort auch ausblenden,
+    // verschwaende ein Klick den Tooltip, obwohl der Zeiger noch auf dem Punkt steht.
+    if (e.pointerType !== 'mouse') lsTooltip.hidden = true;
+  }
+  canvas.addEventListener('pointerup', versteckeBeiBeruehrung);
+  canvas.addEventListener('pointercancel', versteckeBeiBeruehrung);
+  canvas.addEventListener('pointerleave', function () {
+    lsTooltip.hidden = true;
+    canvas.style.cursor = '';
+  });
+});
+
 playBtn.addEventListener('click', function () {
   this.disabled = true;
   wInput.disabled = true;
@@ -841,8 +1284,9 @@ playBtn.addEventListener('click', function () {
       lastLoggedIdx = idx;
     }
     if (frac < 1) {
-      requestAnimationFrame(frame);
+      playRafId = requestAnimationFrame(frame);
     } else {
+      playRafId = null;
       playBtn.disabled = false;
       wInput.disabled = false;
       bInput.disabled = false;
@@ -855,8 +1299,17 @@ playBtn.addEventListener('click', function () {
       renderDistChart(traj);
     }
   }
-  requestAnimationFrame(frame);
+  playRafId = requestAnimationFrame(frame);
 });
+
+function trainOnLeave() {
+  if (playRafId === null) return;
+  cancelAnimationFrame(playRafId);
+  playRafId = null;
+  wInput.disabled = false;
+  bInput.disabled = false;
+  updatePlayEnabled();
+}
 
 let sdOnLeave = null;
 
@@ -867,6 +1320,8 @@ function setTab(name) {
   document.getElementById('tabTraining').classList.toggle('active', isTraining);
   document.getElementById('tabSelfDrive').classList.toggle('active', !isTraining);
   if (isTraining && sdOnLeave) sdOnLeave();
+  if (!isTraining) trainOnLeave();
+  if (isTraining && landscapeDirty) refreshLandscape();
 }
 document.getElementById('tabTraining').addEventListener('click', function () { setTab('training'); });
 document.getElementById('tabSelfDrive').addEventListener('click', function () { setTab('selfdrive'); });
@@ -876,7 +1331,6 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
   const gasBtn = document.getElementById('gasBtnSD');
   const bremseBtn = document.getElementById('bremseBtnSD');
   const statusEl = document.getElementById('sdStatus');
-  const noteEl = document.getElementById('noteValSD');
   const readoutEl = document.getElementById('readoutSD');
   const logAreaSD = document.getElementById('logAreaSD');
   const chartWrapSD = document.getElementById('chartWrapSD');
@@ -926,13 +1380,16 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     readoutEl.textContent = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(3) + 'm  v=' + (p.speed * 3.6).toFixed(3) + ' km/h';
   }
 
+  // Bewusst ohne Strafpunkte: ein Lauf von Hand ist mit dem Trainingsergebnis nicht
+  // vergleichbar (15s Zeitlimit statt 10s, und die im Trainings-Tab gewaehlte
+  // Lossfunktion gilt hier gar nicht -- gerechnet wurde immer mit "Kombiniert").
+  // Eine Zahl, die zum Vergleichen einlaedt, aber nicht vergleichbar ist, ist
+  // schlechter als keine. Die drei Diagramme bleiben: sie beschreiben den Lauf,
+  // statt ihn zu bewerten.
   function stop(reason) {
     running = false;
     if (rafId !== null) cancelAnimationFrame(rafId);
     rafId = null;
-    noteEl.textContent = Math.round(crashed
-      ? noteFor(dist, speed, crashed, undefined, undefined, lossVariants.combined)
-      : noteFor(dist, speed, crashed, stopTimeOf(trajSD), minTimeFor(maxAccelSD), lossVariants.combined));
     statusEl.textContent = reason;
     renderChart(trajSD, actionChartSD, chartWrapSD);
     renderSpeedChart(trajSD, speedChartSD, speedChartWrapSD);
@@ -982,8 +1439,7 @@ document.getElementById('tabSelfDrive').addEventListener('click', function () { 
     chartWrapSD.style.display = 'none';
     speedChartWrapSD.style.display = 'none';
     distChartWrapSD.style.display = 'none';
-    noteEl.textContent = '-';
-    statusEl.textContent = 'laeuft ...';
+    statusEl.textContent = 'läuft ...';
     renderState(trajSD[0]);
     running = true;
     lastTime = performance.now();
