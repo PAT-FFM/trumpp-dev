@@ -53,6 +53,10 @@
   <span class="lbl" id="status" style="min-width:220px">noch nicht trainiert</span>
 </div>
 
+<textarea id="logArea" readonly rows="6" style="display:block;width:100%;box-sizing:border-box;margin-top:0.6rem;margin-bottom:0.9rem;font-family:monospace;font-size:12px;resize:vertical;overflow-y:auto"></textarea>
+
+<textarea id="logAreaTrace" readonly rows="10" style="display:block;width:100%;box-sizing:border-box;margin-bottom:0.9rem;font-family:monospace;font-size:12px;resize:vertical;overflow-y:auto"></textarea>
+
 <div class="row">
   <div class="box"><div class="lbl2">Gewicht w</div><input type="number" step="any" class="val" id="wVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
   <div class="box"><div class="lbl2">Schwelle b</div><input type="number" step="any" class="val" id="bVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
@@ -62,6 +66,18 @@
 <svg viewBox="0 0 680 140">
   <rect x="40" y="90" width="600" height="4" fill="#ccc"/>
   <rect x="620" y="50" width="20" height="60" fill="#888"/>
+  <g>
+    <line x1="100" y1="94" x2="100" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="100" y="112" text-anchor="middle" font-size="11" fill="#555">1.00</text>
+    <line x1="230" y1="94" x2="230" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="230" y="112" text-anchor="middle" font-size="11" fill="#555">0.75</text>
+    <line x1="360" y1="94" x2="360" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="360" y="112" text-anchor="middle" font-size="11" fill="#555">0.50</text>
+    <line x1="490" y1="94" x2="490" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="490" y="112" text-anchor="middle" font-size="11" fill="#555">0.25</text>
+    <line x1="620" y1="94" x2="620" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="614" y="112" text-anchor="end" font-size="11" fill="#555">0.00</text>
+  </g>
   <text x="650" y="45" text-anchor="end" font-size="12" fill="#555">Wand</text>
   <g id="motion"></g>
   <g id="car" transform="translate(560,0)">
@@ -115,8 +131,6 @@
 
 <div id="readout">t=0.0s</div>
 
-<textarea id="logArea" readonly rows="10" style="display:block;width:100%;box-sizing:border-box;margin-top:0.6rem;font-family:monospace;font-size:12px;resize:vertical;overflow-y:auto"></textarea>
-
 <div id="chartWrap" style="display:none;margin-top:0.6rem">
   <div style="font-size:12px;color:#555;margin-bottom:2px">Gas/Bremse über Zeit</div>
   <svg id="actionChart" viewBox="0 0 680 160"></svg>
@@ -144,16 +158,28 @@
 </div>
 
 <div class="row">
-  <span class="lbl" style="min-width:0">Steuerung: Pfeiltaste hoch = Gas, Pfeiltaste runter = Bremse (volles Gas/Bremse solange gedrueckt, danach sofort 0). Gasgeben startet die Fahrt. Auf dem Handy stattdessen die Pedal-Buttons neben der Anzeige gedrueckt halten.</span>
+  <span class="lbl" style="min-width:0">Steuerung: Pfeiltaste hoch = Gas, Pfeiltaste runter = Bremse (volles Gas/Bremse solange gedrueckt, nach Loslassen sofort 0). Gasgeben startet die Fahrt. Bei Stillstand nochmal kurz auf die Bremse tippen beendet die Fahrt vorzeitig (Handbremse). Auf dem Handy stattdessen die Pedal-Buttons neben der Anzeige gedrueckt halten.</span>
 </div>
 
 <div class="row">
-  <span class="lbl" id="sdStatus" style="min-width:220px">bereit – Gas geben zum Start</span>
+  <span class="lbl" id="sdStatus" style="min-width:220px;font-weight:600">bereit – Gas geben zum Start</span>
 </div>
 
 <svg viewBox="0 0 680 140">
   <rect x="40" y="90" width="600" height="4" fill="#ccc"/>
   <rect x="620" y="50" width="20" height="60" fill="#888"/>
+  <g>
+    <line x1="100" y1="94" x2="100" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="100" y="112" text-anchor="middle" font-size="11" fill="#555">1.00</text>
+    <line x1="230" y1="94" x2="230" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="230" y="112" text-anchor="middle" font-size="11" fill="#555">0.75</text>
+    <line x1="360" y1="94" x2="360" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="360" y="112" text-anchor="middle" font-size="11" fill="#555">0.50</text>
+    <line x1="490" y1="94" x2="490" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="490" y="112" text-anchor="middle" font-size="11" fill="#555">0.25</text>
+    <line x1="620" y1="94" x2="620" y2="100" stroke="#999" stroke-width="1.5"/>
+    <text x="614" y="112" text-anchor="end" font-size="11" fill="#555">0.00</text>
+  </g>
   <text x="650" y="45" text-anchor="end" font-size="12" fill="#555">Wand</text>
   <g id="motionSD"></g>
   <g id="carSD" transform="translate(560,0)">
@@ -423,7 +449,6 @@ const trainBtn = document.getElementById('trainBtn');
 const playBtn = document.getElementById('playBtn');
 const status = document.getElementById('status');
 const noteVal = document.getElementById('noteVal');
-const gaugeRow = document.getElementById('gaugeRow');
 const carClassBtnsTrain = document.querySelectorAll('#carClassRow .carClassBtn');
 
 let maxAccelTrain = 2.0;
@@ -489,6 +514,58 @@ function outcomeDetail(w, b, d0, maxAccel) {
   return 'dist=' + last.dist.toFixed(2) + 'm, t=' + stopT.toFixed(1) + 's, v=' + Math.round(last.speed * 3.6) + 'km/h';
 }
 
+// Detaillierte Log-Ausgabe der Neuron-Rechenkette (dist -> ×w' -> +b -> hardTanh ->
+// Gas/Bremse -> v' -> dist neu) fuer den nach dem Training uebernommenen Lauf. Bewusst
+// als Trainings-Output statt synchron zur Animation ("Animation starten") -- live
+// waere das beim Abspielen nicht lesbar. Statt der pro-Schritt-Normierung dist/d0 (wirkte
+// im Log wie ein versteckter Kniff) wird w' = w/d0 einmalig im Kopf umgerechnet, danach
+// rechnet jede Zeile direkt mit der rohen Distanz in Metern -- w*(dist/d0)+b ist
+// aequivalent zu w'*dist+b. Wiederholt sonst dieselbe Physik-Schleife wie simulate(),
+// da deren traj-Eintraege die Zwischenwerte (z, v vor/nach Update) nicht mitfuehren.
+function logNeuronTrace(w, b, d0, maxAccel, logAreaEl) {
+  const wPrime = w / d0;
+  let dist = d0, speed = 0, t = 0;
+  const steps = [];
+  while (t < maxT - 1e-9) {
+    const z = wPrime * dist + b;
+    const action = hardTanh(z);
+    const vBefore = speed;
+    const vAfter = Math.max(0, speed + (action * maxAccel - dragCoeff * speed) * dt);
+    const distBefore = dist;
+    const tBefore = t;
+    const rawDistAfter = distBefore - vAfter * dt;
+    t += dt;
+    const crashedNow = rawDistAfter <= crashDist;
+    dist = crashedNow ? 0 : rawDistAfter;
+    speed = vAfter;
+    steps.push({ t: tBefore, distBefore, z, action, vBefore, vAfter, rawDistAfter, speed, crashedNow });
+    if (crashedNow) break;
+  }
+
+  // Gleiche "Ende der Trajektorie" wie beim Playback (stopIndexOf arbeitet nur auf
+  // .speed): Zeilen nach dem tatsaechlichen Stillstand abschneiden, sonst spammt ein
+  // laengst stehendes Auto das Log zu.
+  const trimmed = steps.slice(0, stopIndexOf(steps) + 1);
+
+  logAreaEl.value +=
+    'Neuron-Iteration für übernommenen Lauf:\n' +
+    '  w=' + w.toFixed(5) + ', b=' + b.toFixed(5) + ', maxAccel=' + maxAccel.toFixed(1) + 'm/s²\n' +
+    '  Normierung: w\' = w/d0 = ' + w.toFixed(5) + '/' + d0.toFixed(2) + ' = ' + wPrime.toFixed(5) + '\n' +
+    '  Formel: v\' = max(0, v + (Gas/Bremse·maxAccel − dragCoeff·v)·dt)\n';
+  trimmed.forEach(function (s, i) {
+    const sign = s.action >= 0 ? '+' : '';
+    const vKmh = (s.vBefore * 3.6).toFixed(1);
+    const vAfterKmh = (s.vAfter * 3.6).toFixed(1);
+    logAreaEl.value +=
+      '\n  Schritt ' + i + ' (t=' + s.t.toFixed(1) + 's, dist=' + s.distBefore.toFixed(2) + 'm, v=' + s.vBefore.toFixed(2) + 'm/s (' + vKmh + 'km/h)):\n' +
+      '    z = w\'*dist+b = ' + wPrime.toFixed(5) + '·' + s.distBefore.toFixed(2) + ' + (' + b.toFixed(5) + ') = ' + s.z.toFixed(3) + ', hardTanh(z) = Gas/Bremse = ' + sign + s.action.toFixed(2) + '\n' +
+      '    v\' = max(0, ' + s.vBefore.toFixed(2) + ' + (' + sign + s.action.toFixed(2) + '·' + maxAccel.toFixed(1) + ' − ' + dragCoeff.toFixed(2) + '·' + s.vBefore.toFixed(2) + ')·' + dt.toFixed(1) + ') = ' + s.vAfter.toFixed(2) + 'm/s (' + vAfterKmh + 'km/h)\n' +
+      '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(2) + ' − ' + s.vAfter.toFixed(2) + '·' + dt.toFixed(1) + ' = ' + s.rawDistAfter.toFixed(2) + 'm' +
+      (s.crashedNow ? '  → Crash (dist ≤ ' + crashDist + 'm)\n' : '\n');
+  });
+  logAreaEl.scrollTop = 0;
+}
+
 function runOnce(d0, maxAccel) {
   let bestW = 0.5, bestB = -0.5, bestCost = costOf(bestW, bestB, d0, maxAccel);
   for (let k = 0; k < 60; k++) {
@@ -529,10 +606,9 @@ trainBtn.addEventListener('click', async function () {
   bInput.disabled = true;
   carClassBtnsTrain.forEach(b => b.disabled = true);
   playBtn.disabled = true;
-  playBtn.hidden = true;
-  gaugeRow.style.display = 'none';
   status.textContent = 'suche startwerte ...';
   logArea.value = '';
+  logAreaTrace.value = '';
 
   // Mehrere unabhaengige Trainingsversuche, bester gewinnt: schuetzt gegen
   // einen einzelnen ungluecklichen Versuch, der in einem mittelmaessigen
@@ -551,6 +627,8 @@ trainBtn.addEventListener('click', async function () {
   logArea.value += '→ übernommen: Restart ' + bestIndex + '/' + restarts + '\n';
   logArea.scrollTop = logArea.scrollHeight;
 
+  logNeuronTrace(best.w, best.b, d0, maxAccelTrain, logAreaTrace);
+
   // Hohe Praezision hier, nicht nur kosmetisch gerundet: das System reagiert
   // nahe der Crash-Schwelle empfindlich auf kleine w/b-Aenderungen (siehe
   // Kommentar bei runOnce), und die Eingabefelder sind jetzt die tatsaechlich
@@ -566,12 +644,11 @@ trainBtn.addEventListener('click', async function () {
   wInput.disabled = false;
   bInput.disabled = false;
   carClassBtnsTrain.forEach(b => b.disabled = false);
-  gaugeRow.style.display = 'block';
-  playBtn.hidden = false;
   updatePlayEnabled();
 });
 
 const logArea = document.getElementById('logArea');
+const logAreaTrace = document.getElementById('logAreaTrace');
 function logLine(p) {
   const line = 't=' + p.t.toFixed(1) + 's  dist=' + p.dist.toFixed(2) + 'm  v=' + (p.speed * 3.6).toFixed(1) + 'km/h  gas/bremse=' + (p.action >= 0 ? '+' : '') + p.action.toFixed(2) + '\n';
   logArea.value += line;
