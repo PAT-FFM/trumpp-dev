@@ -61,6 +61,7 @@
   <div class="box"><div class="lbl2">Gewicht w</div><input type="number" step="any" class="val" id="wVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
   <div class="box"><div class="lbl2">Schwelle b</div><input type="number" step="any" class="val" id="bVal" placeholder="-" style="width:98px;text-align:center;border:1px solid #ccc;border-radius:4px;font:inherit;font-size:18px;font-weight:600;background:#fff"></div>
   <div class="box"><div class="lbl2">Strafpunkte</div><div class="val" id="noteVal">-</div></div>
+  <span style="font-size:11px;color:#888;max-width:220px">regulär (Δt := Zeit über Vorgabe):<br>(dist²·1000 + v²·100 + Δt²·5) · 100<br>bei Crash:<br>(v²·100 + 50000 + |v|·5000) · 100</span>
 </div>
 
 <svg viewBox="0 0 680 140">
@@ -551,14 +552,15 @@ function logNeuronTrace(w, b, d0, maxAccel, logAreaEl) {
     'Neuron-Iteration für übernommenen Lauf:\n' +
     '  w=' + w.toFixed(5) + ', b=' + b.toFixed(5) + ', maxAccel=' + maxAccel.toFixed(1) + 'm/s²\n' +
     '  Normierung: w\' = w/d0 = ' + w.toFixed(5) + '/' + d0.toFixed(2) + ' = ' + wPrime.toFixed(5) + '\n' +
-    '  Formel: v\' = max(0, v + (Gas/Bremse·maxAccel − dragCoeff·v)·dt)\n';
+    '  Formel: v\' = max(0, v + (Gas/Bremse·maxAccel − dragCoeff·v)·dt)\n' +
+    '  Aktivierung: act(x) = hardTanh(x) = max(-1, min(1, x))\n';
   trimmed.forEach(function (s, i) {
     const sign = s.action >= 0 ? '+' : '';
     const vKmh = (s.vBefore * 3.6).toFixed(1);
     const vAfterKmh = (s.vAfter * 3.6).toFixed(1);
     logAreaEl.value +=
       '\n  Schritt ' + i + ' (t=' + s.t.toFixed(1) + 's, dist=' + s.distBefore.toFixed(2) + 'm, v=' + s.vBefore.toFixed(2) + 'm/s (' + vKmh + 'km/h)):\n' +
-      '    z = w\'*dist+b = ' + wPrime.toFixed(5) + '·' + s.distBefore.toFixed(2) + ' + (' + b.toFixed(5) + ') = ' + s.z.toFixed(3) + ', hardTanh(z) = Gas/Bremse = ' + sign + s.action.toFixed(2) + '\n' +
+      '    z = w\'*dist+b = ' + wPrime.toFixed(5) + '·' + s.distBefore.toFixed(2) + ' + (' + b.toFixed(5) + ') = ' + s.z.toFixed(3) + ', act(z) = Gas/Bremse = ' + sign + s.action.toFixed(2) + '\n' +
       '    v\' = max(0, ' + s.vBefore.toFixed(2) + ' + (' + sign + s.action.toFixed(2) + '·' + maxAccel.toFixed(1) + ' − ' + dragCoeff.toFixed(2) + '·' + s.vBefore.toFixed(2) + ')·' + dt.toFixed(1) + ') = ' + s.vAfter.toFixed(2) + 'm/s (' + vAfterKmh + 'km/h)\n' +
       '    dist_neu = dist − v\'·dt = ' + s.distBefore.toFixed(2) + ' − ' + s.vAfter.toFixed(2) + '·' + dt.toFixed(1) + ' = ' + s.rawDistAfter.toFixed(2) + 'm' +
       (s.crashedNow ? '  → Crash (dist ≤ ' + crashDist + 'm)\n' : '\n');
